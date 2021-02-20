@@ -8,5 +8,8 @@ A Skript API with with many useful things, especially for packet stuff.
 * [Reqn](https://forums.skunity.com/resources/reqn.95/)
 * [SkriptJSON](https://forums.skunity.com/resources/skript-json.151/)
 
+## Releases
+https://github.com/Pesekjak/skPapi/releases
+
 ## Have you encountered a problem or do you want to help with something?
 Feel free to message me on discord pesekjan#5182
