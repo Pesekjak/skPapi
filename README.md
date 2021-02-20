@@ -1,5 +1,5 @@
 # skPapi
-A Skript API with with many useful things, especially for packet stuff.
+A Skript API with many useful things, especially for packet stuff.
 
 ## Requirements:
 * [Skript](https://github.com/SkriptLang/Skript/releases)
