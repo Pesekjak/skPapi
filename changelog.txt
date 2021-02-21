@@ -4,4 +4,3 @@ Changelog:
   - Removed honey effect
   - Better example codes
   - Added custom UUID option for client side mobs
-  - Instead of entityID you can now use entitytype in Client side entity effect
