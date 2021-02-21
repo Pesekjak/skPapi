@@ -4,3 +4,4 @@ Changelog:
   - Removed honey effect
   - Better example codes
   - Added custom UUID option for client side mobs
+  - Added team id option to hiding player's nametag
