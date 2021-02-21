@@ -6,5 +6,6 @@ Changelog:
   - Added custom UUID option for client side mobs
   - Added team id option to hiding player's nametag
   - Added remove team syntax for better manipulation with tags
+  - Added effect for rotating player's view
   - Optimized code for nametags
   - Optimized code for setting positions of NPCs and players
