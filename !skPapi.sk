@@ -32,24 +32,29 @@ options:
 #            ⚠ be able to help you with problems ⚠
 #   ______________________________________________________________
 
-	version: 1.0-BETA.1
+	version: 1.0-BETA.2
+
+import:
+	org.bukkit.Bukkit
+
+option nms:
+	get: 
+		set {_nms} to Bukkit.getServer().getClass().getPackage().getName().split("\.")[3]
+		return "net.minecraft.server.%{_nms}%"
 
 import:
 	java.util.Optional
 	java.util.UUID
-	java.io.BufferedReader
-	java.io.InputStreamReader
-	java.net.URL
 	java.util.Arrays
 	
-	net.minecraft.server.v1_16_R3.PacketPlayOutGameStateChange
-	net.minecraft.server.v1_16_R3.PacketPlayOutAnimation
-	
-	org.bukkit.Bukkit
+	{@nms}.PacketPlayOutGameStateChange
+	{@nms}.PacketPlayOutAnimation
+
 	org.bukkit.ChatColor
+	org.bukkit.entity.EntityType
 	
 	ch.njol.skript.Skript
-	
+
 	com.comphenix.protocol.wrappers.WrappedDataWatcher$Registry
 	com.comphenix.protocol.wrappers.WrappedChatComponent
 	com.comphenix.protocol.wrappers.Pair
@@ -64,6 +69,8 @@ import:
 on load:
 	set {wccConverter} to BukkitConverters.getWrappedChatComponentConverter()
 	set {chatFormatEnum} to MinecraftReflection.getMinecraftClass("EnumChatFormat")
+	set {postypes::*} to ...EntityPose.values()
+	set {chatcolors::*} to ...ChatColor.values()
 
 option ver:
 	get:
@@ -122,56 +129,6 @@ expression new (1¦classic|2¦trimmed) uuid:
 		return (UUID.randomUUID().toString() if parse mark is 1, else UUID.randomUUID().toString().replace("-", "")) 
 
 
-# Name: UUID from MojangAPI - get UUID from nickname, useful for offline mode servers
-# Example: uuid from nick "jeb_"
-# ! WARNING ! ! WARNING ! ! WARNING ! ! WARNING ! ! WARNING !
-# This expression works, but I don't recommended to use this.
-# It can cause huge lags (it works same as getting content from URL).
-# If you want to use this for something else than testing, use effect below.
-expression uuid from nick %string%:
-	return type: string
-	get:
-		set {_BufferedReader} to new BufferedReader(new InputStreamReader(new URL("https://api.mojang.com/users/profiles/minecraft/%expr-1%").openStream()))
-		set {_Content::*} to ...{_BufferedReader}.lines()
-		{_BufferedReader}.close()
-		replace all "{""name"":""%expr-1%"",""id"":""" with "" in {_Content::1}
-		replace all """}" with "" in {_Content::1}
-		return {_Content::1}
-
-
-# Name: Connected list - Connects more strings into one
-# Example: set {_text} to connected list {_list::*}
-expression connected list %strings%:
-	return type: string
-	get:
-		set {_text} to ""
-		loop exprs-1:
-			set {_text} to "%{_text}%%loop-expression%"
-		return {_text}
-
-
-# Name: Skin from MojangAPI - Get skin from player's nickname
-# Example: skin from nick "jeb_"
-# ! WARNING ! ! WARNING ! ! WARNING ! ! WARNING ! ! WARNING !
-# This expression works, but I don't recommended to use this.
-# It can cause huge lags (it works same as getting content from URL).
-# If you want to use this for something else than testing, use effect below.
-expression skin from nick %string%:
-	return type: skin
-	get:
-		set {_uuid} to (uuid from nick expr-1)
-		set {_BufferedReader} to new BufferedReader(new InputStreamReader(new URL("https://sessionserver.mojang.com/session/minecraft/profile/%{_uuid}%?unsigned=false").openStream()))
-		set {_Content::*} to ...{_BufferedReader}.lines()
-		{_BufferedReader}.close()
-		set {_value} to {_Content::6}
-		set {_signature} to {_Content::7}
-		replace all "    ""value"" : """ with "" in {_value}
-		replace all """," with "" in {_value}
-		replace all "    ""signature"" : """ with "" in {_signature}
-		replace all """" with "" in {_signature}
-		return skin with value "%{_value}%" signature "%{_signature}%"
-
-
 # Name: JSON Object - Returns JSON object from text, useful for chat components
 # Example: jsonobject from text "&c[ADMIN]"
 expression jsonobject from text %string%:
@@ -182,13 +139,29 @@ expression jsonobject from text %string%:
 
 
 # Name: Entity ID - Returns ID of certain entities, useful for packets
-# Example: set {_id} to entityid of player's target
+# Example: set {_id} to entity id of player's target
 expression entity id of %entities%:
 	return type: integers
 	get:
 		loop exprs-1:
 			add (loop-expression.getEntityId()) to {_ids::*}
 		return {_ids::*}
+
+
+# Name: Entity type ID - Returns ID of entity type, useful for packets
+# Example: set {_id} to entitytype id of player's target
+expression entitytype id of %entitytypes%:
+	return type: integer
+	get:
+		loop exprs-1:
+			set {_loopentity} to "%loop-expression%"
+			set {_v} to {_loopentity} in upper case
+			replace " " in {_v} with "_"
+			loop ...EntityType.values():
+				"%loop-value-2%" = "%{_v}%"
+				set {_b} to loop-value-2.getTypeId()
+				stop loop
+		return {_b}
 
 
 #   ______________________________________________________________
@@ -200,6 +173,32 @@ expression entity id of %entities%:
 #  / _ \  _|  _/ _ \/ __| __/ __|
 # |  __/ | | ||  __/ (__| |_\__ \
 #  \___|_| |_| \___|\___|\__|___/
+
+
+# Name: Store UUID - Stores uuid from player's nickname
+# Example: store uuid from nick "Notch" to {_uuid}
+effect store uuid from nick %string% to %~objects%:
+	trigger:
+		delay the effect
+		send a "get" request to "https://api.mojang.com/users/profiles/minecraft/%expr-1%"
+		set {_resp} to the last http response
+		set {_body} to {_resp}'s body
+		copy json {_body} to {_output::*}
+		set raw expr-2 to {_output::id}
+		continue
+
+
+# Name: Store skin - Stores skin from uuid
+# Example: store skin from uuid {_uuid} to {_skin}
+effect store skin from uuid %string% to %~objects%:
+	trigger:
+		delay the effect
+		send a "get" request to "https://sessionserver.mojang.com/session/minecraft/profile/%expr-1%?unsigned=false"
+		set {_resp} to the last http response
+		set {_body} to {_resp}'s body
+		copy json {_body} to {_output::*}
+		set raw expr-2 to skin with value "%{_output::properties::1::value}%" signature "%{_output::properties::1::signature}%"
+		continue
 
 
 # Name: Destroy entity - Destroys entities from players.
@@ -224,16 +223,17 @@ effect destroy entity with id %integer% from %players%:
 
 
 # Name: Client side entity - Spawns client side entity for players.
-# Example: summon clientside entity 5 with id 101 at player's location for player
-effect summon clientside entity %integer% with id %integer% at %location% for %players%:
+# Example: summon clientside entity 5 with id 101 with uuid (new classic uuid) at player's location for player
+effect summon clientside entity %integer% with id %integer% with uuid %string% at %location% for %players%:
 	trigger:
 		set {_packet} to new play_server_spawn_entity_living packet
 		set int field 1 of {_packet} to expr-1
 		set int field 0 of {_packet} to expr-2
-		set double field 0 of {_packet} to x-pos of expr-3
-		set double field 1 of {_packet} to y-pos of expr-3
-		set double field 2 of {_packet} to z-pos of expr-3
-		send exprs-4 packet {_packet}
+		set uuid field 0 of {_packet} to expr-3
+		set double field 0 of {_packet} to x-pos of expr-4
+		set double field 1 of {_packet} to y-pos of expr-4
+		set double field 2 of {_packet} to z-pos of expr-4
+		send exprs-5 packet {_packet}
 
 
 # Name: Move client side entity - Moves with client side entity for players.
@@ -340,7 +340,7 @@ effect update clientside holo [with id] %integer% with text %string% for %player
 
 
 # Name: Change skin - Changes player's skin for certain players, for visibility call this effect after switching dimensions
-# Example: change skin of player to (skin from nick "jeb_") for all players
+# Example: change skin of player to {_skin} for all players
 effect change skin of %player% to %skin% for %players%:
 	trigger:
 		set {_packet} to new play_server_player_info packet
@@ -355,7 +355,7 @@ effect change skin of %player% to %skin% for %players%:
 
 
 # Name: Change nick - Changes player's nick for certain players, for visibility call this effect after switching dimensions
-# Example: change nick of player to "deadmau5" with skin (skin from nick player's nickname) for all players
+# Example: change nick of player to "deadmau5" with skin {_skin} for all players
 effect change nick of %player% to %string% with skin %skin% for %players%:
 	trigger:
 		set {_packet} to new play_server_player_info packet
@@ -377,7 +377,9 @@ effect remove %player% from tablist of %players%:
 		set "PlayerInfoAction" penum 0 of {_packet} to "REMOVE_PLAYER"
 		set {_a::gamemode} to creative
 		set {_a::gameprofile::name} to expr-1
-		set {_a::gameprofile::skin} to (skin from nick expr-1's nickname)
+		store uuid from nick expr-1's nickname to {_uuid}
+		store skin from uuid {_uuid} to {_skin}
+		set {_a::gameprofile::skin} to {_skin}
 		set {_a::latency} to 0
 		set {_a::gameprofile::uuid} to expr-1's uuid
 		set "PlayerInfoData" array pjson 0 of {_packet} to json of listvar {_a::*}
@@ -392,7 +394,9 @@ effect add %player% to tablist of %players%:
 		set "PlayerInfoAction" penum 0 of {_packet} to "ADD_PLAYER"
 		set {_a::gamemode} to creative
 		set {_a::gameprofile::name} to expr-1
-		set {_a::gameprofile::skin} to (skin from nick expr-1's nickname)
+		store uuid from nick expr-1's nickname to {_uuid}
+		store skin from uuid {_uuid} to {_skin}
+		set {_a::gameprofile::skin} to {_skin}
 		set {_a::latency} to 0
 		set {_a::gameprofile::uuid} to expr-1's uuid
 		set "PlayerInfoData" array pjson 0 of {_packet} to json of listvar {_a::*}
@@ -428,19 +432,19 @@ effect change sky color to %integer% for %players%:
 
 
 # Name: Player tag visibility - Changes player's tag visibility to certain players
-# Example: set visibility to tag "Notch" to false for all players
-effect set visibility to tag %string% to (1¦true|2¦false) for %players%:
+# Example: set visibility to tag "Notch" to false with teamname "hiddentag_%player%" for %players%
+effect set visibility to tag %string% to (1¦true|2¦false) with teamname %string% for %players%:
 	trigger:
 		set {_packet} to new play_server_scoreboard_team packet
 		set byte field 0 of {_packet} to 0 
-		set string field 0 of {_packet} to subtext of random uuid from indices 1 to 16
+		set string field 0 of {_packet} to expr-2
 		{_packet}.getEnumModifier(ChatColor, {chatFormatEnum}).write(0, ChatColor.WHITE)
 		if parse mark is 1:
 			set string field 1 of {_packet} to "always" 
 		else:
 			set string field 1 of {_packet} to "never" 
 		set collection field 0 of {_packet} to expr-1
-		send exprs-2 packet {_packet}
+		send exprs-3 packet {_packet}
 
 
 # Name: Player tags - Changes player's tags (prefix/suffix) to certain players (for entities use their UUIDs, for players use their nicknames)
@@ -450,58 +454,30 @@ effect change %string% tags to %string% and %string% with color %string% with te
 		set {_packet} to new play_server_scoreboard_team packet
 		set byte field 0 of {_packet} to 0 
 		set string field 0 of {_packet} to expr-5
-		if expr-4 is "&r":
-			{_packet}.getEnumModifier(ChatColor, {chatFormatEnum}).write(0, ChatColor.RESET)
-		if expr-4 is "&0":
-			{_packet}.getEnumModifier(ChatColor, {chatFormatEnum}).write(0, ChatColor.BLACK)
-		if expr-4 is "&1":
-			{_packet}.getEnumModifier(ChatColor, {chatFormatEnum}).write(0, ChatColor.DARK_BLUE)
-		if expr-4 is "&2":
-			{_packet}.getEnumModifier(ChatColor, {chatFormatEnum}).write(0, ChatColor.DARK_GREEN)
-		if expr-4 is "&3":
-			{_packet}.getEnumModifier(ChatColor, {chatFormatEnum}).write(0, ChatColor.DARK_AQUA)
-		if expr-4 is "&4":
-			{_packet}.getEnumModifier(ChatColor, {chatFormatEnum}).write(0, ChatColor.DARK_RED)
-		if expr-4 is "&5":
-			{_packet}.getEnumModifier(ChatColor, {chatFormatEnum}).write(0, ChatColor.DARK_PURPLE)
-		if expr-4 is "&6":
-			{_packet}.getEnumModifier(ChatColor, {chatFormatEnum}).write(0, ChatColor.GOLD)
-		if expr-4 is "&7":
-			{_packet}.getEnumModifier(ChatColor, {chatFormatEnum}).write(0, ChatColor.GRAY)
-		if expr-4 is "&8":
-			{_packet}.getEnumModifier(ChatColor, {chatFormatEnum}).write(0, ChatColor.DARK_GRAY)
-		if expr-4 is "&9":
-			{_packet}.getEnumModifier(ChatColor, {chatFormatEnum}).write(0, ChatColor.BLUE)
-		if expr-4 is "&a":
-			{_packet}.getEnumModifier(ChatColor, {chatFormatEnum}).write(0, ChatColor.GREEN)
-		if expr-4 is "&b":
-			{_packet}.getEnumModifier(ChatColor, {chatFormatEnum}).write(0, ChatColor.AQUA)
-		if expr-4 is "&c":
-			{_packet}.getEnumModifier(ChatColor, {chatFormatEnum}).write(0, ChatColor.RED)
-		if expr-4 is "&d":
-			{_packet}.getEnumModifier(ChatColor, {chatFormatEnum}).write(0, ChatColor.LIGHT_PURPLE)
-		if expr-4 is "&e":
-			{_packet}.getEnumModifier(ChatColor, {chatFormatEnum}).write(0, ChatColor.YELLOW)
-		if expr-4 is "&f":
-			{_packet}.getEnumModifier(ChatColor, {chatFormatEnum}).write(0, ChatColor.WHITE)
-		if expr-4 is "&l":
-			{_packet}.getEnumModifier(ChatColor, {chatFormatEnum}).write(0, ChatColor.BOLD)
-		if expr-4 is "&o":
-			{_packet}.getEnumModifier(ChatColor, {chatFormatEnum}).write(0, ChatColor.ITALIC)
-		if expr-4 is "&m":
-			{_packet}.getEnumModifier(ChatColor, {chatFormatEnum}).write(0, ChatColor.STRIKETHROUGH)
-		if expr-4 is "&n":
-			{_packet}.getEnumModifier(ChatColor, {chatFormatEnum}).write(0, ChatColor.UNDERLINE)
-		if expr-4 is "&k":
-			{_packet}.getEnumModifier(ChatColor, {chatFormatEnum}).write(0, ChatColor.MAGIC)
+		set {_colorsymbols::*} to "&0", "&1", "&2", "&3", "&4", "&5", "&6", "&7", "&8", "&9", "&a", "&b", "&c", "&d", "&e", "&f", "&k", "&l", "&m", "&n", "&o", "&r"
+		loop {_colorsymbols::*}:
+			expr-4 = loop-value
+			set {_num} to loop-index
+			stop loop
+		{_packet}.getEnumModifier(ChatColor, {chatFormatEnum}).write(0, {chatcolors::%{_num}%})
 		set chat component field 1 of {_packet} to (jsonobject from text expr-2)
 		set chat component field 2 of {_packet} to (jsonobject from text expr-3)
 		set collection field 0 of {_packet} to expr-1
 		send exprs-6 packet {_packet}
 
 
+# Name: Remove team - Removes team with ID
+# Example: remove clientside team with teamname "hiddentag_%player%" for player
+effect remove clientside team with teamname %string% for %players%:
+	trigger:
+		set {_packet} to new play_server_scoreboard_team packet
+		set byte field 0 of {_packet} to 1
+		set string field 0 of {_packet} to expr-1
+		send exprs-2 packet {_packet}
+
+
 # Name: Fake tablist player - Adds fake player to tablist of certain players, you can use tab in chat
-# Example: add fake tablist player "Notch" with skin (skin from nick "Notch") with uuid (new classic uuid) for all players
+# Example: add fake tablist player "Notch" with skin {_skin} with uuid (new classic uuid) for all players
 effect add fake [tablist] player %string% [with] skin %skin% [with] uuid %string% for %players%:
 	trigger:
 		set {_packet} to new play_server_player_info packet
@@ -574,17 +550,6 @@ effect fakedamage %player% for %players%:
 			loop-expression.getHandle().playerConnection.sendPacket({_packet})
 
 
-# Name: Honey yum :P - Spawns honey particles at entity's feet
-# Example: create honey at player for player
-effect create honey at %entity% for %players%:
-	trigger:
-		set {_packet} to new play_server_entity_status packet
-		set int field 0 of {_packet} to expr-1.getEntityId()
-		loop exprs-2:
-			set byte field 0 of {_packet} to 53
-			send loop-expression packet {_packet}
-
-
 # Name: Position changer - Changes position of player, only other player's can see it
 # Example: set position of player to "STANDING" for all players
 effect set position of %player% to %string% for %players%:
@@ -593,20 +558,12 @@ effect set position of %player% to %string% for %players%:
 		set int field 0 of {_packet} to (entity id of expr-1)
 		set {_dw} to new datawatcher
 		set {_sz} to Registry.get(EnumWrappers.getEntityPoseClass())
-		if expr-2 is "STANDING":
-			{_dw}.setObject(6, {_sz}, EntityPose.STANDING.toNms())
-		else if expr-2 is "FALL_FLYING":
-			{_dw}.setObject(6, {_sz}, EntityPose.FALL_FLYING.toNms())
-		else if expr-2 is "SLEEPING":
-			{_dw}.setObject(6, {_sz}, EntityPose.SLEEPING.toNms())
-		else if expr-2 is "SWIMMING":
-			{_dw}.setObject(6, {_sz}, EntityPose.SWIMMING.toNms())
-		else if expr-2 is "SPIN_ATTACK":
-			{_dw}.setObject(6, {_sz}, EntityPose.SPIN_ATTACK.toNms())
-		else if expr-2 is "CROUCHING":
-			{_dw}.setObject(6, {_sz}, EntityPose.CROUCHING.toNms())
-		else if expr-2 is "DYING":
-			{_dw}.setObject(6, {_sz}, EntityPose.DYING.toNms())
+		set {_pos::*} to "STANDING", "FALL_FLYING", "SLEEPING", "SWIMMING", "SPIN_ATTACK", "CROUCHING", "DYING"
+		loop {_pos::*}:
+			expr-2 = loop-value
+			set {_num} to loop-index
+			stop loop
+		{_dw}.setObject(6, {_sz}, {postypes::%{_num}%}.toNms())
 		set watchable collection field 0 of {_packet} to {_dw}
 		send exprs-3 packet {_packet}
 
@@ -643,7 +600,7 @@ effect force chest at %location% to (1¦open|2¦close) for %players%:
 
 
 # Name: Clientside NPC - Creates clientside npc
-# Example: create clientside npc with id 101 with name "NPC" with skin (skin from nick "Notch") with uuid (new classic uuid) with 2nd skin layer true at location player's location for player
+# Example: create clientside npc with id 101 with name "NPC" with skin {_skin} with uuid (new classic uuid) with 2nd skin layer true at location player's location for player
 effect create clientside npc with id %integer% with name %string% with skin %skin% with uuid %string% with 2nd skin layer %boolean% at location %location% for %players%:
 	trigger:
 		set {_npcspawn} to new play_server_named_entity_spawn packet
@@ -684,20 +641,12 @@ effect set position of entity with id %integer% to %string% for %players%:
 		set int field 0 of {_packet} to expr-1
 		set {_dw} to new datawatcher
 		set {_sz} to Registry.get(EnumWrappers.getEntityPoseClass())
-		if expr-2 is "STANDING":
-			{_dw}.setObject(6, {_sz}, EntityPose.STANDING.toNms())
-		else if expr-2 is "FALL_FLYING":
-			{_dw}.setObject(6, {_sz}, EntityPose.FALL_FLYING.toNms())
-		else if expr-2 is "SLEEPING":
-			{_dw}.setObject(6, {_sz}, EntityPose.SLEEPING.toNms())
-		else if expr-2 is "SWIMMING":
-			{_dw}.setObject(6, {_sz}, EntityPose.SWIMMING.toNms())
-		else if expr-2 is "SPIN_ATTACK":
-			{_dw}.setObject(6, {_sz}, EntityPose.SPIN_ATTACK.toNms())
-		else if expr-2 is "CROUCHING":
-			{_dw}.setObject(6, {_sz}, EntityPose.CROUCHING.toNms())
-		else if expr-2 is "DYING":
-			{_dw}.setObject(6, {_sz}, EntityPose.DYING.toNms())
+		set {_pos::*} to "STANDING", "FALL_FLYING", "SLEEPING", "SWIMMING", "SPIN_ATTACK", "CROUCHING", "DYING"
+		loop {_pos::*}:
+			expr-2 = loop-value
+			set {_num} to loop-index
+			stop loop
+		{_dw}.setObject(6, {_sz}, {postypes::%{_num}%}.toNms())
 		set watchable collection field 0 of {_packet} to {_dw}
 		send exprs-3 packet {_packet}
 
@@ -711,11 +660,19 @@ effect make entity with id %integer% swing for %players%:
 		send exprs-2 packet {_packet}
 
 
+# Name: Cooldown - Sets cooldown of item
+# Example: set cooldown for player of ender pearl to 20 ticks
+effect set cooldown for %players% of %itemtype% to %integer% ticks:
+	trigger:
+		loop expressions-1:
+			loop-expression.setCooldown((random item of expr-2).getType(), expr-3)
+
+
 # Name: Equip clientside - Equips entity clientside for certain players
-# Example: eqiup clientside entity with id 101 with diamond sword air air air air air for player:
+# Example: eqiup clientside entity with id 101 with diamond sword air air air air air for player
 effect eqiup clientside entity with id %integer% with [hand] %itemtype% [offhand] %itemtype% [helmet] %itemtype% [chestplate] %itemtype% [leggings] %itemtype% [boots] %itemtype% for %players%:
 	trigger:
-		set {_packet} to new play_server_entity_equipment packet
+		set {_packet} to new play_server_entity_equipment packet		
 		set {_handslot} to new Pair(ItemSlot.MAINHAND, random item out of (expr-2))
 		set {_offhandslot} to new Pair(ItemSlot.OFFHAND, random item out of (expr-3))
 		set {_helmetslot} to new Pair(ItemSlot.HEAD, random item out of (expr-4))
@@ -726,32 +683,6 @@ effect eqiup clientside entity with id %integer% with [hand] %itemtype% [offhand
 		{_packet}.getSlotStackPairLists().write(0, {_list})
 		set int field 0 of {_packet} to expr-1
 		send exprs-8 packet {_packet}
-
-
-# Name: Store UUID - Stores uuid from player's nickname
-# Example: store uuid from nick "Notch" to {_uuid}
-effect store uuid from nick %string% to %~objects%:
-	trigger:
-		delay the effect
-		send a "get" request to "https://api.mojang.com/users/profiles/minecraft/%expr-1%"
-		set {_resp} to the last http response
-		set {_body} to {_resp}'s body
-		copy json {_body} to {_output::*}
-		set raw expr-2 to {_output::id}
-		continue
-
-
-# Name: Store skin - Stores skin from player's nickname
-# Example: store skin from uuid {_uuid} to {_skin}
-effect store skin from uuid %string% to %~objects%:
-	trigger:
-		delay the effect
-		send a "get" request to "https://sessionserver.mojang.com/session/minecraft/profile/%expr-1%?unsigned=false"
-		set {_resp} to the last http response
-		set {_body} to {_resp}'s body
-		copy json {_body} to {_output::*}
-		set raw expr-2 to skin with value "%{_output::properties::1::value}%" signature "%{_output::properties::1::signature}%"
-		continue
 
 
 #   ______________________________________________________________
@@ -768,27 +699,60 @@ effect store skin from uuid %string% to %~objects%:
 # Name: Clientside interact - Called when player interact with entity clientside (works for holograms and npcs too)
 # Event values: player, clientside-event-entity, interaction-type
 # Example: on clientside interact with entity: broadcast "%player% - %clientside-event-entity% - %interaction-type%"
-event "clientsideEntityInteractLeft":
+event "clientsideEntityInteract":
 	patterns: 
 		clientside interact with entity
 	event-values: player
 expression clientside-event-entity:
 	return type: integer
 	usable in:
-		custom event "clientsideEntityInteractLeft"
+		custom event "clientsideEntityInteract"
 	get:
 		return event.getData("id")
 expression interaction-type:
 	return type: string
 	usable in:
-		custom event "clientsideEntityInteractLeft"
+		custom event "clientsideEntityInteract"
 	get:
 		return event.getData("type")
 on packet event play_client_use_entity:
 	set {_values::player} to player
 	set {_data::id} to (int field 0 of event-packet)
 	set {_data::type} to (object field 1 of event-packet)
-	call custom event "clientsideEntityInteractLeft" with {_values::*} and data {_data::*}
+	call custom event "clientsideEntityInteract" with {_values::*} and data {_data::*}
+
+
+# Name: Clientside digging - Called when player start/stop digging, finish action with item (eating, pulling bow...), drop item/stack, swap hands
+# Event values: player, event-action-type, event-action-location, event-action-side
+# Example: on clientside digging: broadcast "%player% - %event-action-type% - %event-action-location% - %event-action-side%"
+event "clientsideDigging":
+	patterns: 
+		clientside digging
+	event-values: player
+expression event-action-type:
+	return type: string
+	usable in:
+		custom event "clientsideDigging"
+	get:
+		return event.getData("type")
+expression event-action-location:
+	return type: location
+	usable in:
+		custom event "clientsideDigging"
+	get:
+		return event.getData("location")
+expression event-action-side:
+	return type: string
+	usable in:
+		custom event "clientsideDigging"
+	get:
+		return event.getData("side")
+on packet event play_client_block_dig:
+	set {_values::player} to player
+	set {_data::type} to (object field 2 of event-packet)
+	set {_data::location} to (location field 0 of event-packet)
+	set {_data::side} to (object field 1 of event-packet)
+	call custom event "clientsideDigging" with {_values::*} and data {_data::*}
 
 
 #   ______________________________________________________________
