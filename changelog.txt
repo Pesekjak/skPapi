@@ -1,5 +1,6 @@
 Changelog:
   - Removed UUID from MojangAPI and skin from MojangAPI expressions, use effects instead
+  - Removed connect expression
   - Removed honey effect
   - Better example codes
   - Added custom UUID option for client side mobs
