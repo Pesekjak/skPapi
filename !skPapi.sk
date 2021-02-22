@@ -32,7 +32,7 @@ options:
 #            ⚠ be able to help you with problems ⚠
 #   ______________________________________________________________
 
-	version: 1.0-BETA.2
+	version: 1.0-BETA.3
 
 import:
 	org.bukkit.Bukkit
@@ -44,11 +44,10 @@ option nms:
 
 import:
 	java.util.Optional
-	java.util.UUID
 	java.util.Arrays
+
 	
 	{@nms}.PacketPlayOutGameStateChange
-	{@nms}.PacketPlayOutAnimation
 
 	org.bukkit.ChatColor
 	org.bukkit.entity.EntityType
@@ -56,8 +55,10 @@ import:
 	ch.njol.skript.Skript
 
 	com.comphenix.protocol.wrappers.WrappedDataWatcher$Registry
+	com.comphenix.protocol.wrappers.WrappedDataWatcher$WrappedDataWatcherObject
 	com.comphenix.protocol.wrappers.WrappedChatComponent
 	com.comphenix.protocol.wrappers.Pair
+	com.comphenix.protocol.wrappers.Vector3F
 	com.comphenix.protocol.wrappers.BukkitConverters
 	com.comphenix.protocol.wrappers.EnumWrappers
 	com.comphenix.protocol.wrappers.EnumWrappers$EntityPose
@@ -126,7 +127,10 @@ on load:
 expression new (1¦classic|2¦trimmed) uuid:
 	return type: string
 	get:
-		return (UUID.randomUUID().toString() if parse mark is 1, else UUID.randomUUID().toString().replace("-", "")) 
+		set {_uuid} to random uuid
+		if parse mark is 2:
+			replace "-" with "" in {_uuid}
+		return {_uuid}
 
 
 # Name: JSON Object - Returns JSON object from text, useful for chat components
@@ -146,22 +150,6 @@ expression entity id of %entities%:
 		loop exprs-1:
 			add (loop-expression.getEntityId()) to {_ids::*}
 		return {_ids::*}
-
-
-# Name: Entity type ID - Returns ID of entity type, useful for packets
-# Example: set {_id} to entitytype id of player's target
-expression entitytype id of %entitytypes%:
-	return type: integer
-	get:
-		loop exprs-1:
-			set {_loopentity} to "%loop-expression%"
-			set {_v} to {_loopentity} in upper case
-			replace " " in {_v} with "_"
-			loop ...EntityType.values():
-				"%loop-value-2%" = "%{_v}%"
-				set {_b} to loop-value-2.getTypeId()
-				stop loop
-		return {_b}
 
 
 #   ______________________________________________________________
@@ -237,17 +225,36 @@ effect summon clientside entity %integer% with id %integer% with uuid %string% a
 
 
 # Name: Move client side entity - Moves with client side entity for players.
-# Example: move clientside entity with id 101 by 1600 0 1600 90 0 for player
-effect move clientside entity [with id] %integer% by [x:] %integer% [y:] %integer% [z:] %integer% [yaw:] %number% [pitch:] %number% for %players%:
+# Example: move clientside entity with id 101 by 1600 0 1600 for player
+effect move clientside entity [with id] %integer% by [x:] %integer% [y:] %integer% [z:] %integer% for %players%:
 	trigger:
 		set {_packet} to new play_server_rel_entity_move packet
 		set int pnum 0 of {_packet} to expr-1
 		set short pnum 0 of {_packet} to expr-2
 		set short pnum 1 of {_packet} to expr-3
 		set short pnum 2 of {_packet} to expr-4
-		set float field 0 of {_packet} to (expr-5 ? 0)
-		set float field 1 of {_packet} to (expr-6 ? 0)
-		send exprs-7 packet {_packet}
+		send exprs-5 packet {_packet}
+
+
+# Name: Rotate client side entity - Rotates with client side entity for players.
+# Example: rotate clientside entity with id 101 by 16 0 for player
+effect rotate clientside entity [with id] %integer% by [yaw:] %number% [pitch:] %number% for %players%:
+	trigger:
+		set {_packet} to new play_server_entity_look packet
+		set int pnum 0 of {_packet} to expr-1
+		set float field 0 of {_packet} to expr-2
+		set float field 1 of {_packet} to expr-3
+		send exprs-4 packet {_packet}
+
+
+# Name: Rotate head - Rotates head of entity with id for certain players.
+# Example: rotate clientside entity with id 101 by 90 for player:
+effect rotate clientside entity with id %integer% by %number% for %players%:
+	trigger:
+		set {_packet} to new play_server_entity_head_rotation packet
+		set int pnum 0 of {_packet} to expr-1
+		set byte field 0 of {_packet} to (expr-2*256/360)
+		send exprs-3 packet {_packet}
 
 
 # Name: Elytra animation - Applies elytra flying animation to client side entity for players.
@@ -274,6 +281,18 @@ effect make clientside entity [with id] %integer% (1¦glow|2¦unglow) for %playe
 		send exprs-2 packet {_packet}
 
 
+# Name: Make side entity invisible - Applies invisible effect to client side entity for players.
+# Example: make clientside entity with id 101 glow for player:
+effect make clientside entity [with id] %integer% (1¦invisible|2¦not invisible) for %players%:
+	trigger:
+		set {_packet} to new play_server_entity_metadata packet
+		set {_dw} to new datawatcher
+		set watched byte 0 of {_dw} to (32.byteValue() if parse mark = 1, else 0.byteValue())
+		set watchable collection field 0 of {_packet} to {_dw}
+		set int field 0 of {_packet} to expr-1
+		send exprs-2 packet {_packet}
+
+
 # Name: Fire client side entity - Applies fire effect to client side entity for players.
 # Example: make clientside entity with id 101 burn for player:
 effect make clientside entity [with id] %integer% (1¦burn|2¦stop burn) for %players%:
@@ -286,14 +305,21 @@ effect make clientside entity [with id] %integer% (1¦burn|2¦stop burn) for %pl
 		send exprs-2 packet {_packet}
 
 
-# Name: Rotate head - Rotates head of entity with id for certain players.
-# Example: rotate clientside entity with id 101 by 90 for player:
-effect rotate clientside entity with id %integer% by %number% for %players%:
+# Name: Change name of clientside entity - Changes name of client side entity
+# Example: change clientside etntiy with id 101 name to "My entity" for player
+effect change clientside etntiy with id %integer% name to %string% for %players%:
 	trigger:
-		set {_packet} to new play_server_entity_head_rotation packet
-		set int pnum 0 of {_packet} to expr-1
-		set byte field 0 of {_packet} to (expr-2*256/360)
-		send exprs-3 packet {_packet}
+		set {_metadata} to new play_server_entity_metadata packet
+		set {_wcc} to WrappedChatComponent.fromText("%expr-2%")
+		set {_nmsCC} to {wccConverter}.getGeneric({_wcc})
+		set {_name} to Optional.of({_nmsCC})
+		set {_dw} to new datawatcher
+		set watched boolean 3 of {_dw} to true
+		set {_serializer} to Registry.getChatComponentSerializer(true)
+		{_dw}.setObject(2, {_serializer}, {_name})
+		set watchable collection field 0 of {_metadata} to {_dw}
+		set int field 0 of {_metadata} to expr-1
+		send exprs-3 packet {_metadata}
 
 
 # Name: Client side holo - Creates client side hologram, for removing use "Destroy entity with id" effect
@@ -373,7 +399,7 @@ effect change nick of %player% to %string% with skin %skin% for %players%:
 # Example: remove player from tablist of all players
 effect remove %player% from tablist of %players%:
 	trigger:
-		set {_p} to new play_server_player_info packet
+		set {_packet} to new play_server_player_info packet
 		set "PlayerInfoAction" penum 0 of {_packet} to "REMOVE_PLAYER"
 		set {_a::gamemode} to creative
 		set {_a::gameprofile::name} to expr-1
@@ -390,7 +416,7 @@ effect remove %player% from tablist of %players%:
 # Example: add player to tablist of all players
 effect add %player% to tablist of %players%:
 	trigger:
-		set {_p} to new play_server_player_info packet
+		set {_packet} to new play_server_player_info packet
 		set "PlayerInfoAction" penum 0 of {_packet} to "ADD_PLAYER"
 		set {_a::gamemode} to creative
 		set {_a::gameprofile::name} to expr-1
@@ -540,16 +566,6 @@ effect finish action for %players%:
 			send loop-expression packet {_packet}
 
 
-# Name: Fake damage - Fake damages player
-# Example: fakedamage player for all players
-effect fakedamage %player% for %players%:
-	trigger:
-		set {_handle} to expr-1.getHandle()
-		set {_packet} to new PacketPlayOutAnimation({_handle}, 1)
-		loop exprs-2:
-			loop-expression.getHandle().playerConnection.sendPacket({_packet})
-
-
 # Name: Position changer - Changes position of player, only other player's can see it
 # Example: set position of player to "STANDING" for all players
 effect set position of %player% to %string% for %players%:
@@ -651,12 +667,14 @@ effect set position of entity with id %integer% to %string% for %players%:
 		send exprs-3 packet {_packet}
 
 
-# Name: Play swing animation - Swings with hand of entity with id
-# Example: make entity with id 101 swing for all players
-effect make entity with id %integer% swing for %players%:
+# Name: Play entity animation - Play animation of entity with id for certain players
+# Example: force entity with id 101 to make swing hand animation for player
+effect force entity with id %integer% to make (1¦swing hand|2¦damage|3¦leave bed|4¦swing offhand|5¦critical|6¦magic) animation for %players%:
 	trigger:
 		set {_packet} to new play_server_animation packet
 		set int pnum 0 of {_packet} to expr-1
+		set {_num} to parse mark - 1
+		set object field 1 of {_packet} to {_num}.byteValue()
 		send exprs-2 packet {_packet}
 
 
@@ -683,6 +701,34 @@ effect eqiup clientside entity with id %integer% with [hand] %itemtype% [offhand
 		{_packet}.getSlotStackPairLists().write(0, {_list})
 		set int field 0 of {_packet} to expr-1
 		send exprs-8 packet {_packet}
+
+
+# Name: Rotate AS client side  - Rotates client side armor stand for players.
+# Example: rotate part head of clientside armorstand with id 101 by 15 15 15 for player
+effect rotate part (1¦head|2¦body|3¦left arm|4¦right arm|5¦left leg|6¦right leg) of clientside armorstand with id %integer% by %number% %number% %number% for %players%:
+	trigger:
+		set {_packet} to new play_server_entity_metadata packet
+		set {_dw} to new datawatcher
+		set {_num} to (parse mark + 14)
+		set {_Serializer} to Registry.get(Vector3F.getMinecraftClass())
+		set {_headRotation} to new WrappedDataWatcherObject({_num}, {_Serializer})
+		set {_vecc} to new Vector3F(expr-2 and expr-3 and expr-4)
+		{_dw}.setObject({_headRotation}, {_vecc})
+		set watchable collection field 0 of {_packet} to {_dw}
+		set int field 0 of {_packet} to expr-1
+		send exprs-5 packet {_packet}
+
+
+# Name: Armor stand types - Change types of armor stand for players. (1:Small, 4:Arms, 8:NoBase, 16:Marker - Count types together)
+# Example: change clientside armorstand with id 101 type to 5 for player:
+effect change clientside armorstand with id %integer% type to %integer% for %players%:
+	trigger:
+		set {_packet} to new play_server_entity_metadata packet
+		set {_dw} to new datawatcher
+		set watched byte 14 of {_dw} to expr-2.byteValue()
+		set watchable collection field 0 of {_packet} to {_dw}
+		set int field 0 of {_packet} to expr-1
+		send exprs-3 packet {_packet}
 
 
 #   ______________________________________________________________
