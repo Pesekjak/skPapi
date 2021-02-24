@@ -13,4 +13,4 @@ https://github.com/Pesekjak/skPapi/releases
 
 ## Have you encountered a problem or do you want to help with something?
 * [Check docs](https://app.gitbook.com/@jakub-zahomolkou/s/skpapi/)
-Feel free to message me on discord pesekjan#5182
+* Feel free to message me on discord pesekjan#5182
