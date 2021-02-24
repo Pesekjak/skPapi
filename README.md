@@ -11,6 +11,9 @@ A Skript API with many useful things, especially for packet stuff.
 ## Releases
 https://github.com/Pesekjak/skPapi/releases
 
+## Links
+* [SkUnity Page]https://forums.skunity.com/resources/skpapi.1268/
+* [Documentation]https://app.gitbook.com/@jakub-zahomolkou/s/skpapi/
+
 ## Have you encountered a problem or do you want to help with something?
-* [Check docs](https://app.gitbook.com/@jakub-zahomolkou/s/skpapi/)
 * Feel free to message me on discord pesekjan#5182
