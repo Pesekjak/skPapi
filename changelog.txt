@@ -1,14 +1,7 @@
 Changelog:
-  - Added effect for playing animations such as swinging/taking damage
-  - Added effect for making client-side entity invisible
-  - Added effect changing the name of the client-side entity
-  - Added armor stand support
-  - Added effect for rotating individual parts of client-side armor stands
-  - Added effect for changing types of client-side armor stands
-  - Added effect for rotating client-side entities
-  - Move client-side entity effect now works properly
-  - Get entity type ID effect removed, because bukkit doesn't provide support for entitytype IDs in newer versions
-  - Fake damage effect removed
-  - Make client-side entity swing effect removed
-  - Optimized code for getting classic or trimmed UUIDs
+  - Added full clientside bossbar support
+  - Added full clientside teams support
+  - Added effect to crash player's client
+  - Added /papi command
+  - API now has documentation
   - And some other small changes
