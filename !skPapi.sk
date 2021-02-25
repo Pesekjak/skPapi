@@ -19,9 +19,11 @@
 #
 #  If you run into problems, feel free to message me on discord: pesekjan#5182
 #
+#  DOCUMENTATION: https://app.gitbook.com/@jakub-zahomolkou/s/skpapi/
+#  ORIGINAL PAGE OF SCRIPT: https://forums.skunity.com/resources/skpapi.1268/
 #
 #  Ｃｒｅｄｉｔｓ (っ◔◡◔)っ ♥
-#    Big thanks to Mr.Darth for helping me with packets and reflection (https://forums.skunity.com/resources/authors/mr-darth.11173/)
+#    Big thanks to Mr.Darth for helping me with packets and reflection (https://forums.skunity.com/members/mr-darth.11173/)
 #    Govindas for helping me with some packets for NPCs (https://forums.skunity.com/members/govindas.643/)
 
 options:
@@ -32,7 +34,7 @@ options:
 #            ⚠ be able to help you with problems ⚠
 #   ______________________________________________________________
 
-	version: 1.0-BETA.3
+	version: 1.0-BETA.4
 
 import:
 	org.bukkit.Bukkit
@@ -46,11 +48,14 @@ import:
 	java.util.Optional
 	java.util.Arrays
 
-	
 	{@nms}.PacketPlayOutGameStateChange
+	{@nms}.BossBattle$BarStyle as BarStyleNMS
+	{@nms}.PacketPlayOutBoss$Action as BarActionsNMS
 
 	org.bukkit.ChatColor
 	org.bukkit.entity.EntityType
+	org.bukkit.boss.BarColor
+	org.bukkit.boss.BarStyle
 	
 	ch.njol.skript.Skript
 
@@ -72,10 +77,10 @@ on load:
 	set {chatFormatEnum} to MinecraftReflection.getMinecraftClass("EnumChatFormat")
 	set {postypes::*} to ...EntityPose.values()
 	set {chatcolors::*} to ...ChatColor.values()
+	set {barcolors::*} to ...BarColor.values()
+	set {bartypes::*} to ...BarStyleNMS.values()
+	set {baractions::*} to ...BarActionsNMS.values()
 
-option ver:
-	get:
-		return console.getServer().getClass().getPackage().getName().split("\.")[3]
 
 on load:
 	set {_skript-reflect.ver} to "2.1.1"
@@ -242,8 +247,8 @@ effect rotate clientside entity [with id] %integer% by [yaw:] %number% [pitch:] 
 	trigger:
 		set {_packet} to new play_server_entity_look packet
 		set int pnum 0 of {_packet} to expr-1
-		set float field 0 of {_packet} to expr-2
-		set float field 1 of {_packet} to expr-3
+		set float field 0 of {_packet} to (expr-2*256/360)
+		set float field 1 of {_packet} to (expr-3*256/360)
 		send exprs-4 packet {_packet}
 
 
@@ -281,7 +286,7 @@ effect make clientside entity [with id] %integer% (1¦glow|2¦unglow) for %playe
 		send exprs-2 packet {_packet}
 
 
-# Name: Make side entity invisible - Applies invisible effect to client side entity for players.
+# Name: Make client side entity invisible - Applies invisible effect to client side entity for players.
 # Example: make clientside entity with id 101 glow for player:
 effect make clientside entity [with id] %integer% (1¦invisible|2¦not invisible) for %players%:
 	trigger:
@@ -306,8 +311,8 @@ effect make clientside entity [with id] %integer% (1¦burn|2¦stop burn) for %pl
 
 
 # Name: Change name of clientside entity - Changes name of client side entity
-# Example: change clientside etntiy with id 101 name to "My entity" for player
-effect change clientside etntiy with id %integer% name to %string% for %players%:
+# Example: change clientside entity with id 101 name to "My entity" for player
+effect change clientside entity with id %integer% name to %string% for %players%:
 	trigger:
 		set {_metadata} to new play_server_entity_metadata packet
 		set {_wcc} to WrappedChatComponent.fromText("%expr-2%")
@@ -490,16 +495,6 @@ effect change %string% tags to %string% and %string% with color %string% with te
 		set chat component field 2 of {_packet} to (jsonobject from text expr-3)
 		set collection field 0 of {_packet} to expr-1
 		send exprs-6 packet {_packet}
-
-
-# Name: Remove team - Removes team with ID
-# Example: remove clientside team with teamname "hiddentag_%player%" for player
-effect remove clientside team with teamname %string% for %players%:
-	trigger:
-		set {_packet} to new play_server_scoreboard_team packet
-		set byte field 0 of {_packet} to 1
-		set string field 0 of {_packet} to expr-1
-		send exprs-2 packet {_packet}
 
 
 # Name: Fake tablist player - Adds fake player to tablist of certain players, you can use tab in chat
@@ -731,6 +726,176 @@ effect change clientside armorstand with id %integer% type to %integer% for %pla
 		send exprs-3 packet {_packet}
 
 
+# Name: Create teams - Creates teams for certain players
+# Example: create clientside team with teamname "admins" with tags 0 with tag visibility "always" with collisions "never" with color "&c" with prefix "&c[&eADMIN&c] " with suffix "" for all players
+effect create clientside team with teamname %string% with tags %integer% with tag visibility %string% with collisions %string% with color %string% with prefix %string% with suffix %string% for %players%:
+	trigger:
+		set {_packet} to new play_server_scoreboard_team packet
+		set int field 0 of {_packet} to 0
+		set string field 0 of {_packet} to expr-1
+		set byte field 1 of {_packet} to expr-2.byteValue()
+		set string field 1 of {_packet} to expr-3
+		set string field 2 of {_packet} to expr-4
+		set {_colorsymbols::*} to "&0", "&1", "&2", "&3", "&4", "&5", "&6", "&7", "&8", "&9", "&a", "&b", "&c", "&d", "&e", "&f", "&k", "&l", "&m", "&n", "&o", "&r"
+		loop {_colorsymbols::*}:
+			expr-5 = loop-value
+			set {_num} to loop-index
+			stop loop
+		{_packet}.getEnumModifier(ChatColor, {chatFormatEnum}).write(0, {chatcolors::%{_num}%})
+		set chat component field 1 of {_packet} to (jsonobject from text expr-6)
+		set chat component field 2 of {_packet} to (jsonobject from text expr-7)
+		send exprs-8 packet {_packet}
+
+
+# Name: Update teams - Updates teams for certain players
+# Example: update clientside team with teamname "admins" with tags 0 with tag visibility "always" with collisions "never" with color "&c" with prefix "&c[&eADMIN&c] " with suffix "" for all players
+effect update clientside team with teamname %string% with tags %integer% with tag visibility %string% with collisions %string% with color %string% with prefix %string% with suffix %string% for %players%:
+	trigger:
+		set {_packet} to new play_server_scoreboard_team packet
+		set int field 0 of {_packet} to 1
+		set string field 0 of {_packet} to expr-1
+		set byte field 1 of {_packet} to expr-2.byteValue()
+		set string field 1 of {_packet} to expr-3
+		set string field 2 of {_packet} to expr-4
+		set {_colorsymbols::*} to "&0", "&1", "&2", "&3", "&4", "&5", "&6", "&7", "&8", "&9", "&a", "&b", "&c", "&d", "&e", "&f", "&k", "&l", "&m", "&n", "&o", "&r"
+		loop {_colorsymbols::*}:
+			expr-5 = loop-value
+			set {_num} to loop-index
+			stop loop
+		{_packet}.getEnumModifier(ChatColor, {chatFormatEnum}).write(0, {chatcolors::%{_num}%})
+		set chat component field 1 of {_packet} to (jsonobject from text expr-6)
+		set chat component field 2 of {_packet} to (jsonobject from text expr-7)
+		send exprs-8 packet {_packet}
+
+
+# Name: Add players to team - Adds players to team, for players use their nicknames, for entites use UUIDs
+# Example: add to clientside team with teamname "admins" entity player's nickname for all players
+effect add to clientside team with teamname %string% entity %strings% for %players%:
+	trigger:
+		set {_packet} to new play_server_scoreboard_team packet
+		set int field 0 of {_packet} to 3
+		set string field 0 of {_packet} to expr-1
+		set collection field 0 of {_packet} to exprs-2
+		send exprs-3 packet {_packet}
+
+
+# Name: Remove players to team - Removes players from team, for players use their nicknames, for entites use UUIDs
+# Example: remove from clientside team with teamname "admins" entity player's nickname for all players
+effect remove from clientside team with teamname %string% entity %string% for %players%:
+	trigger:
+		set string field 0 of {_packet} to expr-1
+		set {_packet} to new play_server_scoreboard_team packet
+		set int field 0 of {_packet} to 4
+		set collection field 0 of {_packet} to expr-2
+		send exprs-3 packet {_packet}
+
+
+# Name: Remove team - Removes team with ID
+# Example: remove clientside team with teamname "admins" for all players
+effect remove clientside team with teamname %string% for %players%:
+	trigger:
+		set {_packet} to new play_server_scoreboard_team packet
+		set int field 0 of {_packet} to 1
+		set string field 0 of {_packet} to expr-1
+		send exprs-2 packet {_packet}
+
+
+# Name: Create boss bar - Creates boss bars for certain players
+# Example: 
+effect create clientside bossbar with uuid %string% title %string% health %number% color (1¦PINK|2¦BLUE|3¦RED|4¦GREEN|5¦YELLOW|6¦PURPLE|7¦WHITE) division %integer% darksky %boolean% music %boolean% fog %boolean% for %players%:
+	trigger:
+		set {_packet} to new play_server_boss packet
+		set uuid field 0 of {_packet} to expr-1
+		set int field 0 of {_packet} to 0
+		set chat component field 0 of {_packet} to (jsonobject from text expr-2)
+		set float field 0 of {_packet} to expr-3
+		{_packet}.getEnumModifier(BarColor, 4).write(0, {barcolors::%parse mark%})
+		{_packet}.getEnumModifier(BarStyle, 5).write(0, {bartypes::%expr-4%})
+		{_packet}.getBooleans().write(0, expr-5)
+		{_packet}.getBooleans().write(1, expr-6)
+		{_packet}.getBooleans().write(2, expr-7)
+		send exprs-8 packet {_packet}
+
+
+# Name: Remove boss bar - Removes boss bars for certain players
+# Example: remove clientside bossbar with uuid (new classic uuid) for player
+effect remove clientside bossbar with uuid %string% for %players%:
+	trigger:
+		set {_packet} to new play_server_boss packet
+		set uuid field 0 of {_packet} to expr-1
+		set object field 1 of {_packet} to {baractions::2}
+		send exprs-2 packet {_packet}
+
+
+# Name: Update health of boss bar - Updates boss bar's health for certain players
+# Example: update health of clientside bossbar with uuid (new classic uuid) to 0 for player
+effect update health of clientside bossbar with uuid %string% to %number% for %players%:
+	trigger:
+		set {_packet} to new play_server_boss packet
+		set uuid field 0 of {_packet} to expr-1
+		set object field 1 of {_packet} to {baractions::3}
+		set float field 0 of {_packet} to expr-2
+		send exprs-3 packet {_packet}
+
+
+# Name: Update title of boss bar - Updates boss bar's title for certain players
+# Example: update title of clientside bossbar with uuid (new classic uuid) to "New title" for player
+effect update title of clientside bossbar with uuid %string% to %string% for %players%:
+	trigger:
+		set {_packet} to new play_server_boss packet
+		set uuid field 0 of {_packet} to expr-1
+		set object field 1 of {_packet} to {baractions::4}
+		set chat component field 0 of {_packet} to (jsonobject from text expr-2)
+		send exprs-3 packet {_packet}
+
+
+# Name: Update style of boss bar - Updates boss bar's style for certain players
+# Example: update style of clientside bossbar with uuid %string% to color GREEN division 1 for player
+effect update style of clientside bossbar with uuid %string% to color (1¦PINK|2¦BLUE|3¦RED|4¦GREEN|5¦YELLOW|6¦PURPLE|7¦WHITE) division %integer% for %players%:
+	trigger:
+		set {_packet} to new play_server_boss packet
+		set uuid field 0 of {_packet} to expr-1
+		set object field 1 of {_packet} to {baractions::5}
+		{_packet}.getEnumModifier(BarColor, 4).write(0, {barcolors::%parse mark%})
+		{_packet}.getEnumModifier(BarStyle, 5).write(0, {bartypes::%expr-2%})
+		send exprs-3 packet {_packet}
+
+
+# Name: Update flags of boss bar - Updates boss bar's flags for certain players
+# Example: update flags of clientside bossbar with uuid (new classic uuid) to "New title" for player
+effect update flags of clientside bossbar with uuid %string% to darksky %boolean% music %boolean% fog %boolean% for %players%:
+	trigger:
+		set {_packet} to new play_server_boss packet
+		set uuid field 0 of {_packet} to expr-1
+		set object field 1 of {_packet} to {baractions::6}
+		{_packet}.getBooleans().write(0, expr-2)
+		{_packet}.getBooleans().write(1, expr-3)
+		{_packet}.getBooleans().write(2, expr-4)
+		send exprs-5 packet {_packet}
+
+
+# Name: Crash game - Crashes game for certain players
+# Example: crash game for player
+effect crash game for %players%:
+	trigger:
+		set {_uuid} to (new classic uuid)
+		set {_packet} to new play_server_boss packet
+		set uuid field 0 of {_packet} to {_uuid}
+		set int field 0 of {_packet} to 2
+		set float field 0 of {_packet} to 1
+		send exprs-1 packet {_packet}
+
+
+# Name: Header and footer - Changes header and footer for certain players
+# Example: set header to "Test%nl%&6header" and footer to "&eI like SkPapi" for player
+effect set header to %string% and footer to %string% for %players%:
+	trigger:
+		set {_packet} to new play_server_player_list_header_footer packet
+		set chat component field 0 of {_packet} to (jsonobject from text expr-1)
+		set chat component field 1 of {_packet} to (jsonobject from text expr-2)
+		send exprs-3 packet {_packet}
+
+
 #   ______________________________________________________________
 
 
@@ -802,3 +967,42 @@ on packet event play_client_block_dig:
 
 
 #   ______________________________________________________________
+
+command /papi [<text>]:
+	aliases: /skpapi
+	trigger:
+		if player is not op:
+			send formatted "&6&lSKPAPI: &6Server us running &bSkPapi-{@version}&6, get your own here: <link:https://github.com/Pesekjak/skPapi>&9&ngithub.com/Pesekjak/skPapi<reset>" to player
+			stop trigger
+		if arg-1 is "update":
+			message "&6&lSKPAPI: &6Server us running &bSkPapi-{@version}&6..."
+			message "&6Checking version..."
+			send a "get" request to "https://raw.githubusercontent.com/Pesekjak/skPapi/main/version.txt"
+			set {_resp} to the last http response
+			set {_LastVer} to {_resp}'s body
+			set {_LastVerChars::*} to {_LastVer} split by ""
+			set {_LastVer} to ""
+			loop {_LastVerChars::*}:
+				if loop-value is "." or "1" or "2" or "3" or "4" or "5" or "6" or "7" or "8" or "9" or "0" or "-" or "B" or "E" or "T" or "A":
+					set {_LastVer} to "%{_LastVer}%%loop-value%"
+			if {_LastVer} is not "{@version}":
+				send "&6&lSKPAPI: &6Detected version {@version}&6, the newest version is %{_LastVer}%" to player
+				send formatted "&6Gew the newest version here: &9&n<link:https://github.com/Pesekjak/skPapi>github.com/Pesekjak/skPapi<reset>" to player
+			else:
+				message "&6&lSKPAPI: &6You running the latest version of SkPapi"
+		else if arg-1 is "changelog":
+			message "&6Checking changelog..."
+			send a "get" request to "https://raw.githubusercontent.com/Pesekjak/skPapi/main/changelog.txt"
+			set {_resp} to the last http response
+			set {_ChangeLog} to {_resp}'s body
+			send "" to player
+			send "&6%{_ChangeLog}%" to player
+		else if arg-1 is "about":
+			message "&6&lSKPAPI: &6Server us running &bSkPapi-{@version}&6. Thanks for downloading!"
+			message "&6Author: pesekjan"
+			message "&6Credits &c<3&6: Mr.Darth, Govindas"
+			send formatted "&6For better understanding syntaxes, check documentation here: <link:https://app.gitbook.com/@jakub-zahomolkou/s/skpapi/>&9&napp.gitbook.com/@jakub-zahomolkou/s/skpapi<reset>" to player
+		else:
+			message "&6&lSKPAPI: &6Server us running &bSkPapi-{@version}&6. Thanks for downloading!"
+			loop "update", "changelog" and "about":
+				message "&6- &7/papi %loop-value%"
