@@ -1,6 +1,6 @@
 Changelog:
-  - Added full clientside bossbar support
-  - Added full clientside teams support
+  - Added full client-side boss bar support
+  - Added full client-side teams support
   - Added effect to crash player's client
   - Added /papi command
   - API now has documentation
