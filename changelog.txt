@@ -1,8 +1,9 @@
 Changelog:
-  - Added full client-side boss bar support
-  - Added full client-side teams support
-  - Added effect to crash player's client
-  - Added support for client-side tablist header and footer
-  - Added /papi command
-  - API now has documentation
+  - Added full client-side world borders support
+  - Added full client-side sign guis support
+  - Added full client-side resource packs support
+  - Added effect for displaying/canceling block break animation
+  - Added event for recieving messages, can work as logger and can replace messages from other plugins which can't be configured
+  - Added event for block update, you can detect change of all ingame blocks
+  - Added event for getting client's payload, you can detect if player is using mods/custom clients
   - And some other small changes
