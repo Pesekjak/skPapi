@@ -2,6 +2,7 @@ Changelog:
   - Added full client-side world borders support
   - Added full client-side sign guis support
   - Added full client-side resource packs support
+  - Added expression for getting entity type ID
   - Added effect for displaying/canceling block break animation
   - Added event for receiving messages, can work as a logger and can replace messages from other plugins which can't be configured
   - Added event for block update, you can detect the change of all in-game blocks
