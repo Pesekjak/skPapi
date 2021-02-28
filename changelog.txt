@@ -3,7 +3,7 @@ Changelog:
   - Added full client-side sign guis support
   - Added full client-side resource packs support
   - Added effect for displaying/canceling block break animation
-  - Added event for recieving messages, can work as logger and can replace messages from other plugins which can't be configured
-  - Added event for block update, you can detect change of all ingame blocks
-  - Added event for getting client's payload, you can detect if player is using mods/custom clients
+  - Added event for receiving messages, can work as a logger and can replace messages from other plugins which can't be configured
+  - Added event for block update, you can detect the change of all in-game blocks
+  - Added event for getting client's payload, you can detect if the player is using mods/custom clients
   - And some other small changes
