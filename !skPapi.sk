@@ -34,7 +34,7 @@ options:
 #            ⚠ be able to help you with problems ⚠
 #   ______________________________________________________________
 
-	version: 1.0-BETA.4
+	version: 1.0-BETA.5
 
 import:
 	org.bukkit.Bukkit
@@ -48,6 +48,9 @@ import:
 	java.util.Optional
 	java.util.Arrays
 
+	{@nms}.IRegistry
+	{@nms}.MinecraftKey
+	
 	{@nms}.PacketPlayOutGameStateChange
 	{@nms}.BossBattle$BarStyle as BarStyleNMS
 	{@nms}.PacketPlayOutBoss$Action as BarActionsNMS
@@ -69,6 +72,7 @@ import:
 	com.comphenix.protocol.wrappers.EnumWrappers$EntityPose
 	com.comphenix.protocol.wrappers.EnumWrappers$ItemSlot
 	com.comphenix.protocol.wrappers.EnumWrappers$EntityUseAction
+	com.comphenix.protocol.wrappers.EnumWrappers$WorldBorderAction
 	com.comphenix.protocol.utility.MinecraftReflection
 
 
@@ -156,6 +160,19 @@ expression entity id of %entities%:
 			add (loop-expression.getEntityId()) to {_ids::*}
 		return {_ids::*}
 
+
+# Name: Entity type ID - Returns entity type ID, useful for summoning client side entity
+# Example: set {_id} to entity type id of player's target
+expression entity type id of %entities%:
+	return type: integers
+	get:
+		loop exprs-1:
+			set {_ent} to "%loop-expression%"
+			set {_id} to IRegistry.ENTITY_TYPE.a(IRegistry.ENTITY_TYPE.get(new MinecraftKey("%{_ent}%")))
+			set {_id} to {_id} parsed as integer
+			add {_id} to {_ids::*}
+		return {_ids::*}
+		
 
 #   ______________________________________________________________
 
@@ -344,6 +361,7 @@ effect create clientside holo %string% with id %integer% at %location% for %play
 		set {_name} to Optional.of({_nmsCC})
 		set {_dw} to new datawatcher
 		set watched byte 0 of {_dw} to 32.byteValue()
+		set watched byte 14 of {_dw} to 16.byteValue()
 		set watched boolean 3 of {_dw} to true
 		set {_serializer} to Registry.getChatComponentSerializer(true)
 		{_dw}.setObject(2, {_serializer}, {_name})
@@ -801,7 +819,7 @@ effect remove clientside team with teamname %string% for %players%:
 
 
 # Name: Create boss bar - Creates boss bars for certain players
-# Example: 
+# Example: create clientside bossbar with uuid {_uuid} title "&b&lCLIENT SIDE BOSSBAR" health 0.5 color RED division 4 darksky true music true fog true for player
 effect create clientside bossbar with uuid %string% title %string% health %number% color (1¦PINK|2¦BLUE|3¦RED|4¦GREEN|5¦YELLOW|6¦PURPLE|7¦WHITE) division %integer% darksky %boolean% music %boolean% fog %boolean% for %players%:
 	trigger:
 		set {_packet} to new play_server_boss packet
@@ -818,7 +836,7 @@ effect create clientside bossbar with uuid %string% title %string% health %numbe
 
 
 # Name: Remove boss bar - Removes boss bars for certain players
-# Example: remove clientside bossbar with uuid (new classic uuid) for player
+# Example: remove clientside bossbar with uuid {_uuid} for player
 effect remove clientside bossbar with uuid %string% for %players%:
 	trigger:
 		set {_packet} to new play_server_boss packet
@@ -828,7 +846,7 @@ effect remove clientside bossbar with uuid %string% for %players%:
 
 
 # Name: Update health of boss bar - Updates boss bar's health for certain players
-# Example: update health of clientside bossbar with uuid (new classic uuid) to 0 for player
+# Example: update health of clientside bossbar with uuid {_uuid} to 0 for player
 effect update health of clientside bossbar with uuid %string% to %number% for %players%:
 	trigger:
 		set {_packet} to new play_server_boss packet
@@ -839,7 +857,7 @@ effect update health of clientside bossbar with uuid %string% to %number% for %p
 
 
 # Name: Update title of boss bar - Updates boss bar's title for certain players
-# Example: update title of clientside bossbar with uuid (new classic uuid) to "New title" for player
+# Example: update title of clientside bossbar with uuid {_uuid} to "New title" for player
 effect update title of clientside bossbar with uuid %string% to %string% for %players%:
 	trigger:
 		set {_packet} to new play_server_boss packet
@@ -850,7 +868,7 @@ effect update title of clientside bossbar with uuid %string% to %string% for %pl
 
 
 # Name: Update style of boss bar - Updates boss bar's style for certain players
-# Example: update style of clientside bossbar with uuid %string% to color GREEN division 1 for player
+# Example: update style of clientside bossbar with uuid {_uuid} to color GREEN division 1 for player
 effect update style of clientside bossbar with uuid %string% to color (1¦PINK|2¦BLUE|3¦RED|4¦GREEN|5¦YELLOW|6¦PURPLE|7¦WHITE) division %integer% for %players%:
 	trigger:
 		set {_packet} to new play_server_boss packet
@@ -862,7 +880,7 @@ effect update style of clientside bossbar with uuid %string% to color (1¦PINK|2
 
 
 # Name: Update flags of boss bar - Updates boss bar's flags for certain players
-# Example: update flags of clientside bossbar with uuid (new classic uuid) to "New title" for player
+# Example: update flags of clientside bossbar with uuid {_uuid} to darksky true music true fog false for %players%
 effect update flags of clientside bossbar with uuid %string% to darksky %boolean% music %boolean% fog %boolean% for %players%:
 	trigger:
 		set {_packet} to new play_server_boss packet
@@ -894,6 +912,125 @@ effect set header to %string% and footer to %string% for %players%:
 		set chat component field 0 of {_packet} to (jsonobject from text expr-1)
 		set chat component field 1 of {_packet} to (jsonobject from text expr-2)
 		send exprs-3 packet {_packet}
+
+
+# Name: Block break animation - Set block break animations of blocks for certain players
+# Example: set block break of block at {_loc} to state 5 entity id (random integer between 0 and 9999) for player
+effect set block break of block at %location% to [state] %integer% entity id %integer% for %players%:
+	trigger:
+		set {_packet} to new play_server_block_break_animation packet
+		set location field 0 of {_packet} to expr-1
+		set int field 0 of {_packet} to expr-3
+		set int field 1 of {_packet} to expr-2
+		loop exprs-4:
+			send loop-expression packet {_packet}
+
+
+# Name: Send resource pack - Sends resource pack request. For hash use lowercase SHA-1 hashed URL of pack
+# Example: request pack from url "https://www.google.cz/" with hash "197cfd2e6827bee3c84bb2c7bcebbec2e7eaa0ea" for player
+effect request pack from url %string% with hash %string% for %players%:
+	trigger:
+		set {_packet} to new play_server_resource_pack_send packet
+		set string field 0 of {_packet} to expr-1
+		set string field 1 of {_packet} to expr-2
+		send exprs-3 packet {_packet}
+
+
+# Name: Open sign gui - Opens client-side sign gui for player
+# Example: open new signgui with text "", "===============", "TYPE NEW NICKNAME", "===============" type birch sign to player
+effect open [new] sign[ ]gui with text %strings% type %itemtype% to %players%:
+	trigger:
+		set {_packet} to new play_server_open_sign_editor packet
+		loop 4 times:
+			set {_line::%loop-number%} to ""
+		set {_count} to 1
+		loop exprs-1:
+			set {_line::%{_count}%} to loop-expression
+			add 1 to {_count}
+		set {_linesarray} to ["%{_line::1}%", "%{_line::2}%", "%{_line::3}%", "%{_line::4}%"]
+		loop exprs-3:
+			set {_players::%loop-expression%} to loop-expression
+		loop {_players::*}:
+			set {_loc::%loop-value%} to location behind loop-value
+			make loop-value see block at {_loc::%loop-value%} as expr-2
+		wait a tick
+		loop {_players::*}:
+			loop-value.sendSignChange({_loc::%loop-value%}, {_linesarray})
+		wait a tick
+		loop {_players::*}:
+			set location field 0 of {_packet} to {_loc::%loop-value%}
+			send packet {_packet} to loop-value
+
+
+# Name: Set world border size - Sets size of world border
+# Example: set size of client side world border to 10 for player
+effect set size of client side world border to %integer% for %players%:
+	trigger:
+		set {_packet} to new play_server_world_border packet
+		{_packet}.getWorldBorderActions().write(0, WorldBorderAction.SET_SIZE)
+		{_packet}.getDoubles().write(2, expr-1)
+		{_packet}.getDoubles().write(3, expr-1)
+		send exprs-2 packet {_packet}
+
+
+# Name: Change world border center - Changes center of world border
+# Example: set center of client side world border to X 800 Z -900 for player
+effect set center of client side world border to X %number% Z %number% for %players%:
+	trigger:
+		set {_packet} to new play_server_world_border packet
+		{_packet}.getWorldBorderActions().write(0, WorldBorderAction.SET_CENTER)
+		{_packet}.getDoubles().write(0, expr-1)
+		{_packet}.getDoubles().write(1, expr-2)
+		send exprs-3 packet {_packet}
+
+
+# Name: Warning size - Changes warning size of client-side world border (tints screen red)
+# Example: set size of client side world border to 50 for player
+effect set warning of client side world border to %number% for %players%:
+	trigger:
+		set {_packet} to new play_server_world_border packet
+		{_packet}.getWorldBorderActions().write(0, WorldBorderAction.SET_WARNING_BLOCKS)
+		set int field 2 of {_packet} to expr-1
+		send exprs-2 packet {_packet}
+
+
+# Name: Lerp size - Lerps size of world border (use milliseconds as speed)
+# Example: lerp size of client side world border from 20 to 50 with speed 1000 for player
+effect lerp size of client side world border from %number% to %number% with speed %number% for %players%:
+	trigger:
+		set {_packet} to new play_server_world_border packet
+		{_packet}.getWorldBorderActions().write(0, WorldBorderAction.LERP_SIZE)
+		set double field 3 of {_packet} to expr-1.doubleValue()
+		set double field 2 of {_packet} to expr-2.doubleValue()
+		set long field 0 of {_packet} to expr-3.longValue()
+		send exprs-4 packet {_packet}
+
+
+# Name: Initalize client-side world border - Initalizes client-side world border (use milliseconds as speed)
+# Example: initalize client side world border to X (x-coord of player's location) Z (z-coord of player's location) from 50 to 20 with speed 5000 warning time 10 warning blocks 5 for player
+effect initalize client side world border to X %number% Z %number% from %number% to %number% with speed %number% warning time %number% warning blocks %number% for %players%:
+	trigger:
+		set {_packet} to new play_server_world_border packet
+		{_packet}.getWorldBorderActions().write(0, WorldBorderAction.INITIALIZE)
+		set double field 0 of {_packet} to expr-1.doubleValue()
+		set double field 1 of {_packet} to expr-2.doubleValue()
+		set double field 3 of {_packet} to expr-3.doubleValue()
+		set double field 2 of {_packet} to expr-4.doubleValue()
+		set long field 0 of {_packet} to expr-5.longValue()
+		set int field 0 of {_packet} to 29900000
+		set int field 1 of {_packet} to expr-6
+		set int field 2 of {_packet} to expr-7
+		send exprs-8 packet {_packet}
+
+
+# Name: Warning time - Changes warning time of client-side world border
+# Example: set warning time of client side world border to 50 for player
+effect set warning time of client side world border to %number% for %players%:
+	trigger:
+		set {_packet} to new play_server_world_border packet
+		{_packet}.getWorldBorderActions().write(0, WorldBorderAction.SET_WARNING_TIME)
+		set int field 1 of {_packet} to expr-1
+		send exprs-2 packet {_packet}
 
 
 #   ______________________________________________________________
@@ -966,16 +1103,140 @@ on packet event play_client_block_dig:
 	call custom event "clientsideDigging" with {_values::*} and data {_data::*}
 
 
+# Name: Message recieve - Called when player recieves a chat message (You can cancel the event, very useful if you want to get rid of/replace some annoying plugin messages)
+# Event values: player, recieved-message
+# Example: on clientside message recieve: send "%player% - %recieved-message%" to console
+event "clientsideMessageRecieve":
+	patterns: 
+		clientside message recieve
+	event-values: player
+expression recieved-message:
+	return type: string
+	usable in:
+		custom event "clientsideMessageRecieve"
+	get:
+		return event.getData("message")
+on packet event play_server_chat:
+	set {_data::message} to "%(chat component field 0 of event-packet)%"
+	set {_values::player} to player
+	set {_event} to custom event "clientsideMessageRecieve" with {_values::*} and data {_data::*}
+	call {_event}
+	{_event} is cancelled
+	cancel event
+
+
+# Name: Advanced join - Called when player joins, can detect mods in client, version etc.
+# Event values: player, vanilla, payload
+# Example: on advanced join: broadcast "%player% - %vanilla% - %payload%"
+event "advancedPayloadJoin":
+	patterns: 
+		advanced join
+	event-values: player
+expression vanilla:
+	return type: boolean
+	usable in:
+		custom event "advancedPayloadJoin"
+	get:
+		return event.getData("vanilla")
+expression payload:
+	return type: string
+	usable in:
+		custom event "advancedPayloadJoin"
+	get:
+		return event.getData("payload")
+on packet event play_client_custom_payload:
+	set {_data::vanilla} to false
+	set {_channel::*} to object field 0 of event-packet
+	loop {_channel::*}:
+		if "%loop-value%" is "MC|Brand" or "minecraft:brand":
+			set {_message} to new String([byte buffer field of event-packet])
+			{_message} contains "vanilla"
+			set {_data::vanilla} to true
+		set {_data::payload} to "%{_channel::*}%"
+	set {_values::player} to player
+	call custom event "advancedPayloadJoin" with {_values::*} and data {_data::*}
+
+
+# Name: Resource pack status - Called when player successfully load/decline/failed download or accept resourcepack
+# Event values: player, pack-status
+# Example: on clientside resourcepack status: broadcast "%player% - %pack-status%"
+event "clientsideResourcePackStatus":
+	patterns: 
+		clientside resourcepack status
+	event-values: player
+expression pack-status:
+	return type: string
+	usable in:
+		custom event "clientsideResourcePackStatus"
+	get:
+		return event.getData("status")
+on packet event play_client_resource_pack_status:
+	set {_data::status} to "%(object field 0 of event-packet)%"
+	set {_values::player} to player
+	call custom event "clientsideResourcePackStatus" with {_values::*} and data {_data::*}
+
+
+# Name: Sign gui update - Called when player change sign gui
+# Event values: player, line-%integer%
+# Example: on sign gui update: broadcast "%player% - %line-1%, %line-2%, %line-3%, %line-4%"
+event "signUpdate":
+    patterns: 
+        sign gui update
+    event-values: player
+expression line-%number%:
+	return type: string
+	usable in:
+		custom event "signUpdate"
+	get:
+		return event.getData("%expr-1%")
+on packet event play_client_update_sign:
+	set {_loc} to location field 0 of event-packet
+	block at {_loc} is not a sign
+	make player see block at {_loc} as block at {_loc}
+	set {_values::player} to player
+	loop string array field 0 of event-packet:
+		add 1 to {_num}
+		set {_data::%{_num}%} to loop-value
+	call custom event "signUpdate" with {_values::*} and data {_data::*}
+
+
+# Name: Block change - Called when block is changed (Can catch changing flower pots, activiting pistons etc.)
+# Event values: player, block-location, block-data
+# Example: on client-side block change: broadcast "%player% - %block-location% - %block-data%"
+event "blockChange":
+    patterns: 
+        client-side block change
+    event-values: player
+expression block-location:
+	return type: location
+	usable in:
+		custom event "blockChange"
+	get:
+		return event.getData("location")
+expression block-data:
+	return type: string
+	usable in:
+		custom event "blockChange"
+	get:
+		return event.getData("id")
+packet event play_server_block_change:
+	set {_values::player} to player
+	set {_id} to object field 1 of event-packet
+	set {_data::id} to "%{_id}%"
+	set {_data::location} to location field 0 of event-packet
+	call custom event "blockChange" with {_values::*} and data {_data::*}
+
+
 #   ______________________________________________________________
 
 command /papi [<text>]:
 	aliases: /skpapi
 	trigger:
 		if player is not op:
-			send formatted "&6&lSKPAPI: &6Server us running &bSkPapi-{@version}&6, get your own here: <link:https://github.com/Pesekjak/skPapi>&9&ngithub.com/Pesekjak/skPapi<reset>" to player
+			send formatted "&6&lSKPAPI: &6Server is running &bSkPapi-{@version}&6, get your own here: <link:https://github.com/Pesekjak/skPapi>&9&ngithub.com/Pesekjak/skPapi<reset>" to player
 			stop trigger
 		if arg-1 is "update":
-			message "&6&lSKPAPI: &6Server us running &bSkPapi-{@version}&6..."
+			message "&6&lSKPAPI: &6Server is running &bSkPapi-{@version}&6..."
 			message "&6Checking version..."
 			send a "get" request to "https://raw.githubusercontent.com/Pesekjak/skPapi/main/version.txt"
 			set {_resp} to the last http response
@@ -998,11 +1259,11 @@ command /papi [<text>]:
 			send "" to player
 			send "&6%{_ChangeLog}%" to player
 		else if arg-1 is "about":
-			message "&6&lSKPAPI: &6Server us running &bSkPapi-{@version}&6. Thanks for downloading!"
+			message "&6&lSKPAPI: &6Server is running &bSkPapi-{@version}&6. Thanks for downloading!"
 			message "&6Author: pesekjan"
 			message "&6Credits &c<3&6: Mr.Darth, Govindas"
 			send formatted "&6For better understanding syntaxes, check documentation here: <link:https://app.gitbook.com/@jakub-zahomolkou/s/skpapi/>&9&napp.gitbook.com/@jakub-zahomolkou/s/skpapi<reset>" to player
 		else:
-			message "&6&lSKPAPI: &6Server us running &bSkPapi-{@version}&6. Thanks for downloading!"
+			message "&6&lSKPAPI: &6Server is running &bSkPapi-{@version}&6. Thanks for downloading!"
 			loop "update", "changelog" and "about":
 				message "&6- &7/papi %loop-value%"
