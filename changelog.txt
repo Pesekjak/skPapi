@@ -1,10 +1,10 @@
 Changelog:
-  - Added full client-side world borders support
-  - Added full client-side sign guis support
-  - Added full client-side resource packs support
-  - Added expression for getting entity type ID
-  - Added effect for displaying/canceling block break animation
-  - Added event for receiving messages, can work as a logger and can replace messages from other plugins which can't be configured
-  - Added event for block update, you can detect the change of all in-game blocks
-  - Added event for getting client's payload, you can detect if the player is using mods/custom clients
+  - Added effect for making player sleep
+  - Added effect for waking player up
+  - Added effect for reading content from website using Reqn
+  - Added effect for picking up items client-sided
+  - Added effect for changing player's camera
+  - Added effect for setting passengers of entity client-sided
+  - Updating client-side team didn't work
+  - All syntaxes now uses numbers instead of integers because Skript handles them poorly
   - And some other small changes
