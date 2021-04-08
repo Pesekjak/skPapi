@@ -6,5 +6,5 @@ Changelog:
   - Added effect for changing player's camera
   - Added effect for setting passengers of entity client-sided
   - Updating the client-side team didn't work
-  - All syntaxes now uses numbers instead of integers because Skript handles them poorly
+  - All syntaxes now use numbers instead of integers because Skript handles them poorly
   - And some other small changes
