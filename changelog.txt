@@ -1,10 +1,10 @@
 Changelog:
   - Added effect for making player sleep
   - Added effect for waking player up
-  - Added effect for reading content from website using Reqn
+  - Added effect for reading content from the website using Reqn
   - Added effect for picking up items client-sided
   - Added effect for changing player's camera
   - Added effect for setting passengers of entity client-sided
-  - Updating client-side team didn't work
+  - Updating the client-side team didn't work
   - All syntaxes now uses numbers instead of integers because Skript handles them poorly
   - And some other small changes
