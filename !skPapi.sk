@@ -50,10 +50,12 @@ import:
 
 	{@nms}.IRegistry
 	{@nms}.MinecraftKey
+	{@nms}.BlockPosition
 	
 	{@nms}.PacketPlayOutGameStateChange
 	{@nms}.BossBattle$BarStyle as BarStyleNMS
 	{@nms}.PacketPlayOutBoss$Action as BarActionsNMS
+	{@nms}.PacketPlayOutCollect
 
 	org.bukkit.ChatColor
 	org.bukkit.entity.EntityType
@@ -225,7 +227,7 @@ effect destroy %entities% (from|for) %players%:
 
 # Name: Destroy entity with id - Destroys entity with certain ID from players. (Use this for client side entities)
 # Example: destroy entity with id 101 from player:
-effect destroy entity with id %integer% from %players%:
+effect destroy entity with id %number% from %players%:
 	trigger:
 		set {_packet} to new play_server_entity_destroy packet
 		set int array field of {_packet} to expr-1
@@ -234,7 +236,7 @@ effect destroy entity with id %integer% from %players%:
 
 # Name: Client side entity - Spawns client side entity for players.
 # Example: summon clientside entity 5 with id 101 with uuid (new classic uuid) at player's location for player
-effect summon clientside entity %integer% with id %integer% with uuid %string% at %location% for %players%:
+effect summon clientside entity %number% with id %number% with uuid %string% at %location% for %players%:
 	trigger:
 		set {_packet} to new play_server_spawn_entity_living packet
 		set int field 1 of {_packet} to expr-1
@@ -248,7 +250,7 @@ effect summon clientside entity %integer% with id %integer% with uuid %string% a
 
 # Name: Move client side entity - Moves with client side entity for players.
 # Example: move clientside entity with id 101 by 1600 0 1600 for player
-effect move clientside entity [with id] %integer% by [x:] %integer% [y:] %integer% [z:] %integer% for %players%:
+effect move clientside entity [with id] %number% by [x:] %number% [y:] %number% [z:] %number% for %players%:
 	trigger:
 		set {_packet} to new play_server_rel_entity_move packet
 		set int pnum 0 of {_packet} to expr-1
@@ -260,7 +262,7 @@ effect move clientside entity [with id] %integer% by [x:] %integer% [y:] %intege
 
 # Name: Rotate client side entity - Rotates with client side entity for players.
 # Example: rotate clientside entity with id 101 by 16 0 for player
-effect rotate clientside entity [with id] %integer% by [yaw:] %number% [pitch:] %number% for %players%:
+effect rotate clientside entity [with id] %number% by [yaw:] %number% [pitch:] %number% for %players%:
 	trigger:
 		set {_packet} to new play_server_entity_look packet
 		set int pnum 0 of {_packet} to expr-1
@@ -271,7 +273,7 @@ effect rotate clientside entity [with id] %integer% by [yaw:] %number% [pitch:] 
 
 # Name: Rotate head - Rotates head of entity with id for certain players.
 # Example: rotate clientside entity with id 101 by 90 for player:
-effect rotate clientside entity with id %integer% by %number% for %players%:
+effect rotate clientside entity with id %number% by %number% for %players%:
 	trigger:
 		set {_packet} to new play_server_entity_head_rotation packet
 		set int pnum 0 of {_packet} to expr-1
@@ -279,9 +281,23 @@ effect rotate clientside entity with id %integer% by %number% for %players%:
 		send exprs-3 packet {_packet}
 
 
+# Name: Teleport client side entity - Teleports client side entity for players.
+# Example: teleport clientside entity with id 101 to player's location for player
+effect teleport clientside entity [with id] %number% to %location% for %players%:
+	trigger:
+		set {_packet} to new play_server_entity_teleport packet
+		set int pnum 0 of {_packet} to expr-1
+		set double field 0 of {_packet} to (x-coord of expr-2)
+		set double field 1 of {_packet} to (y-coord of expr-2)
+		set double field 2 of {_packet} to (z-coord of expr-2)
+		set float field 0 of {_packet} to (yaw of expr-2)
+		set float field 1 of {_packet} to (pitch of expr-2)
+		send exprs-3 packet {_packet}
+
+
 # Name: Elytra animation - Applies elytra flying animation to client side entity for players.
 # Example: force clientside entity with id 101 to fly for player:
-effect force clientside entity [with id] %integer% to (1¦fly|2¦stand) for %players%:
+effect force clientside entity [with id] %number% to (1¦fly|2¦stand) for %players%:
 	trigger:
 		set {_packet} to new play_server_entity_metadata packet
 		set {_dw} to new datawatcher
@@ -293,7 +309,7 @@ effect force clientside entity [with id] %integer% to (1¦fly|2¦stand) for %pla
 
 # Name: Glow client side entity - Applies glow effect to client side entity for players.
 # Example: make clientside entity with id 101 glow for player:
-effect make clientside entity [with id] %integer% (1¦glow|2¦unglow) for %players%:
+effect make clientside entity [with id] %number% (1¦glow|2¦unglow) for %players%:
 	trigger:
 		set {_packet} to new play_server_entity_metadata packet
 		set {_dw} to new datawatcher
@@ -305,7 +321,7 @@ effect make clientside entity [with id] %integer% (1¦glow|2¦unglow) for %playe
 
 # Name: Make client side entity invisible - Applies invisible effect to client side entity for players.
 # Example: make clientside entity with id 101 glow for player:
-effect make clientside entity [with id] %integer% (1¦invisible|2¦not invisible) for %players%:
+effect make clientside entity [with id] %number% (1¦invisible|2¦not invisible) for %players%:
 	trigger:
 		set {_packet} to new play_server_entity_metadata packet
 		set {_dw} to new datawatcher
@@ -317,7 +333,7 @@ effect make clientside entity [with id] %integer% (1¦invisible|2¦not invisible
 
 # Name: Fire client side entity - Applies fire effect to client side entity for players.
 # Example: make clientside entity with id 101 burn for player:
-effect make clientside entity [with id] %integer% (1¦burn|2¦stop burn) for %players%:
+effect make clientside entity [with id] %number% (1¦burn|2¦stop burn) for %players%:
 	trigger:
 		set {_packet} to new play_server_entity_metadata packet
 		set {_dw} to new datawatcher
@@ -329,7 +345,7 @@ effect make clientside entity [with id] %integer% (1¦burn|2¦stop burn) for %pl
 
 # Name: Change name of clientside entity - Changes name of client side entity
 # Example: change clientside entity with id 101 name to "My entity" for player
-effect change clientside entity with id %integer% name to %string% for %players%:
+effect change clientside entity with id %number% name to %string% for %players%:
 	trigger:
 		set {_metadata} to new play_server_entity_metadata packet
 		set {_wcc} to WrappedChatComponent.fromText("%expr-2%")
@@ -346,7 +362,7 @@ effect change clientside entity with id %integer% name to %string% for %players%
 
 # Name: Client side holo - Creates client side hologram, for removing use "Destroy entity with id" effect
 # Example: create clientside holo "My Hologram" with id 101 at player's location for player
-effect create clientside holo %string% with id %integer% at %location% for %players%:
+effect create clientside holo %string% with id %number% at %location% for %players%:
 	trigger:
 		set {_packet} to new play_server_spawn_entity_living packet
 		set int field 1 of {_packet} to 1
@@ -372,7 +388,7 @@ effect create clientside holo %string% with id %integer% at %location% for %play
 
 # Name: Update side holo - Updates text of client side hologram
 # Example: update clientside holo with id 101 with text "Updated text" for player
-effect update clientside holo [with id] %integer% with text %string% for %players%:
+effect update clientside holo [with id] %number% with text %string% for %players%:
 	trigger:
 		set {_metadata} to new play_server_entity_metadata packet
 		set {_wcc} to WrappedChatComponent.fromText("%expr-2%")
@@ -472,7 +488,7 @@ effect force rain (1¦start|2¦stop) for %players%:
 
 # Name: Custom sky - Change client side color of the sky for players. keep in mind that rain has to be on (I don't recommend going over 21, use -1 for brighter stars)
 # Example: change sky color to 5 for player
-effect change sky color to %integer% for %players%:
+effect change sky color to %number% for %players%:
 	trigger:
 		set {_packet} to new PacketPlayOutGameStateChange(PacketPlayOutGameStateChange.h, expr-1)
 		player.getHandle().playerConnection.sendPacket({_packet})
@@ -536,7 +552,7 @@ effect remove fake [tablist] player with uuid %string% for %players%:
 		set {_packet} to new play_server_player_info packet
 		set "PlayerInfoAction" penum 0 of {_packet} to "REMOVE_PLAYER"
 		set {_a::gamemode} to creative
-		set {_a::gameprofile::name} to "-"
+		set {_a::gameprofile::name} to "Steve"
 		set {_a::gameprofile::skin} to steve
 		set {_a::latency} to 0
 		set {_a::gameprofile::uuid} to expr-1
@@ -630,7 +646,7 @@ effect force chest at %location% to (1¦open|2¦close) for %players%:
 
 # Name: Clientside NPC - Creates clientside npc
 # Example: create clientside npc with id 101 with name "NPC" with skin {_skin} with uuid (new classic uuid) with 2nd skin layer true at location player's location for player
-effect create clientside npc with id %integer% with name %string% with skin %skin% with uuid %string% with 2nd skin layer %boolean% at location %location% for %players%:
+effect create clientside npc with id %number% with name %string% with skin %skin% with uuid %string% with 2nd skin layer %boolean% at location %location% for %players%:
 	trigger:
 		set {_npcspawn} to new play_server_named_entity_spawn packet
 		set int pnum 0 of {_npcspawn} to expr-1
@@ -664,7 +680,7 @@ effect create clientside npc with id %integer% with name %string% with skin %ski
 
 # Name: Position changer from id - Changes position of entity with id for certain players
 # Example: set position of entity with id 101 to "STANDING" for all players
-effect set position of entity with id %integer% to %string% for %players%:
+effect set position of entity with id %number% to %string% for %players%:
 	trigger:
 		set {_packet} to new play_server_entity_metadata packet
 		set int field 0 of {_packet} to expr-1
@@ -682,7 +698,7 @@ effect set position of entity with id %integer% to %string% for %players%:
 
 # Name: Play entity animation - Play animation of entity with id for certain players
 # Example: force entity with id 101 to make swing hand animation for player
-effect force entity with id %integer% to make (1¦swing hand|2¦damage|3¦leave bed|4¦swing offhand|5¦critical|6¦magic) animation for %players%:
+effect force entity with id %number% to make (1¦swing hand|2¦damage|3¦leave bed|4¦swing offhand|5¦critical|6¦magic) animation for %players%:
 	trigger:
 		set {_packet} to new play_server_animation packet
 		set int pnum 0 of {_packet} to expr-1
@@ -693,7 +709,7 @@ effect force entity with id %integer% to make (1¦swing hand|2¦damage|3¦leave 
 
 # Name: Cooldown - Sets cooldown of item
 # Example: set cooldown for player of ender pearl to 20 ticks
-effect set cooldown for %players% of %itemtype% to %integer% ticks:
+effect set cooldown for %players% of %itemtype% to %number% ticks:
 	trigger:
 		loop expressions-1:
 			loop-expression.setCooldown((random item of expr-2).getType(), expr-3)
@@ -701,7 +717,7 @@ effect set cooldown for %players% of %itemtype% to %integer% ticks:
 
 # Name: Equip clientside - Equips entity clientside for certain players
 # Example: eqiup clientside entity with id 101 with diamond sword air air air air air for player
-effect eqiup clientside entity with id %integer% with [hand] %itemtype% [offhand] %itemtype% [helmet] %itemtype% [chestplate] %itemtype% [leggings] %itemtype% [boots] %itemtype% for %players%:
+effect eqiup clientside entity with id %number% with [hand] %itemtype% [offhand] %itemtype% [helmet] %itemtype% [chestplate] %itemtype% [leggings] %itemtype% [boots] %itemtype% for %players%:
 	trigger:
 		set {_packet} to new play_server_entity_equipment packet		
 		set {_handslot} to new Pair(ItemSlot.MAINHAND, random item out of (expr-2))
@@ -718,7 +734,7 @@ effect eqiup clientside entity with id %integer% with [hand] %itemtype% [offhand
 
 # Name: Rotate AS client side  - Rotates client side armor stand for players.
 # Example: rotate part head of clientside armorstand with id 101 by 15 15 15 for player
-effect rotate part (1¦head|2¦body|3¦left arm|4¦right arm|5¦left leg|6¦right leg) of clientside armorstand with id %integer% by %number% %number% %number% for %players%:
+effect rotate part (1¦head|2¦body|3¦left arm|4¦right arm|5¦left leg|6¦right leg) of clientside armorstand with id %number% by %number% %number% %number% for %players%:
 	trigger:
 		set {_packet} to new play_server_entity_metadata packet
 		set {_dw} to new datawatcher
@@ -734,7 +750,7 @@ effect rotate part (1¦head|2¦body|3¦left arm|4¦right arm|5¦left leg|6¦righ
 
 # Name: Armor stand types - Change types of armor stand for players. (1:Small, 4:Arms, 8:NoBase, 16:Marker - Count types together)
 # Example: change clientside armorstand with id 101 type to 5 for player:
-effect change clientside armorstand with id %integer% type to %integer% for %players%:
+effect change clientside armorstand with id %number% type to %number% for %players%:
 	trigger:
 		set {_packet} to new play_server_entity_metadata packet
 		set {_dw} to new datawatcher
@@ -746,7 +762,7 @@ effect change clientside armorstand with id %integer% type to %integer% for %pla
 
 # Name: Create teams - Creates teams for certain players
 # Example: create clientside team with teamname "admins" with tags 0 with tag visibility "always" with collisions "never" with color "&c" with prefix "&c[&eADMIN&c] " with suffix "" for all players
-effect create clientside team with teamname %string% with tags %integer% with tag visibility %string% with collisions %string% with color %string% with prefix %string% with suffix %string% for %players%:
+effect create clientside team with teamname %string% with tags %number% with tag visibility %string% with collisions %string% with color %string% with prefix %string% with suffix %string% for %players%:
 	trigger:
 		set {_packet} to new play_server_scoreboard_team packet
 		set int field 0 of {_packet} to 0
@@ -767,10 +783,10 @@ effect create clientside team with teamname %string% with tags %integer% with ta
 
 # Name: Update teams - Updates teams for certain players
 # Example: update clientside team with teamname "admins" with tags 0 with tag visibility "always" with collisions "never" with color "&c" with prefix "&c[&eADMIN&c] " with suffix "" for all players
-effect update clientside team with teamname %string% with tags %integer% with tag visibility %string% with collisions %string% with color %string% with prefix %string% with suffix %string% for %players%:
+effect update clientside team with teamname %string% with tags %number% with tag visibility %string% with collisions %string% with color %string% with prefix %string% with suffix %string% for %players%:
 	trigger:
 		set {_packet} to new play_server_scoreboard_team packet
-		set int field 0 of {_packet} to 1
+		set int field 0 of {_packet} to 2
 		set string field 0 of {_packet} to expr-1
 		set byte field 1 of {_packet} to expr-2.byteValue()
 		set string field 1 of {_packet} to expr-3
@@ -820,7 +836,7 @@ effect remove clientside team with teamname %string% for %players%:
 
 # Name: Create boss bar - Creates boss bars for certain players
 # Example: create clientside bossbar with uuid {_uuid} title "&b&lCLIENT SIDE BOSSBAR" health 0.5 color RED division 4 darksky true music true fog true for player
-effect create clientside bossbar with uuid %string% title %string% health %number% color (1¦PINK|2¦BLUE|3¦RED|4¦GREEN|5¦YELLOW|6¦PURPLE|7¦WHITE) division %integer% darksky %boolean% music %boolean% fog %boolean% for %players%:
+effect create clientside bossbar with uuid %string% title %string% health %number% color (1¦PINK|2¦BLUE|3¦RED|4¦GREEN|5¦YELLOW|6¦PURPLE|7¦WHITE) division %number% darksky %boolean% music %boolean% fog %boolean% for %players%:
 	trigger:
 		set {_packet} to new play_server_boss packet
 		set uuid field 0 of {_packet} to expr-1
@@ -869,7 +885,7 @@ effect update title of clientside bossbar with uuid %string% to %string% for %pl
 
 # Name: Update style of boss bar - Updates boss bar's style for certain players
 # Example: update style of clientside bossbar with uuid {_uuid} to color GREEN division 1 for player
-effect update style of clientside bossbar with uuid %string% to color (1¦PINK|2¦BLUE|3¦RED|4¦GREEN|5¦YELLOW|6¦PURPLE|7¦WHITE) division %integer% for %players%:
+effect update style of clientside bossbar with uuid %string% to color (1¦PINK|2¦BLUE|3¦RED|4¦GREEN|5¦YELLOW|6¦PURPLE|7¦WHITE) division %number% for %players%:
 	trigger:
 		set {_packet} to new play_server_boss packet
 		set uuid field 0 of {_packet} to expr-1
@@ -916,7 +932,7 @@ effect set header to %string% and footer to %string% for %players%:
 
 # Name: Block break animation - Set block break animations of blocks for certain players
 # Example: set block break of block at {_loc} to state 5 entity id (random integer between 0 and 9999) for player
-effect set block break of block at %location% to [state] %integer% entity id %integer% for %players%:
+effect set block break of block at %location% to [state] %number% entity id %number% for %players%:
 	trigger:
 		set {_packet} to new play_server_block_break_animation packet
 		set location field 0 of {_packet} to expr-1
@@ -964,7 +980,7 @@ effect open [new] sign[ ]gui with text %strings% type %itemtype% to %players%:
 
 # Name: Set world border size - Sets size of world border
 # Example: set size of client side world border to 10 for player
-effect set size of client side world border to %integer% for %players%:
+effect set size of client side world border to %number% for %players%:
 	trigger:
 		set {_packet} to new play_server_world_border packet
 		{_packet}.getWorldBorderActions().write(0, WorldBorderAction.SET_SIZE)
@@ -1031,6 +1047,93 @@ effect set warning time of client side world border to %number% for %players%:
 		{_packet}.getWorldBorderActions().write(0, WorldBorderAction.SET_WARNING_TIME)
 		set int field 1 of {_packet} to expr-1
 		send exprs-2 packet {_packet}
+
+
+# Name: Clientside time - Changes time for certain players
+# Example: set clientside time to world age 0 time 16000 for player
+effect set clientside time to world age %number% time %number% for %players%:
+	trigger:
+		set {_packet} to new play_server_update_time packet
+		set long field 0 of {_packet} to expr-1
+		set long field 1 of {_packet} to expr-2
+		send exprs-3 packet {_packet}
+
+
+# Name: Sleep - Makes player sleep
+# Example: make player sleep at player's location for player
+effect make %players% sleep at %location% for %players%:
+	trigger:
+		set {_packet} to new play_server_entity_metadata packet
+		set {_OptionalBlockPos} to Optional.of(new BlockPosition(x location of expression-2, (y location of expression-2) - 0.5 and z location of expression-2))
+		set {_dw} to new datawatcher
+		set {_Serializer} to Registry.getBlockPositionSerializer(true)
+		set {_DWO} to new WrappedDataWatcherObject(13 and {_Serializer})
+		{_dw}.setObject({_DWO} and {_OptionalBlockPos})
+		set {_Serializer2} to Registry.get(EnumWrappers.getEntityPoseClass())
+		{_dw}.setObject(6, {_Serializer2}, EntityPose.SLEEPING.toNms())
+		set watchable collection field 0 of {_packet} to {_dw}
+		loop expressions-1:
+			set int pnum 0 of {_packet} to (loop-value).getEntityId()
+			send packet {_packet} to loop-value
+
+
+# Name: Wake up - Wakes up player
+# Example: wakeup player for player
+effect wakeup %players% for %players%:
+	trigger:
+		set {_packet} to new play_server_entity_metadata packet
+		set {_OptionalBlockPos} to Optional.empty()
+		set {_dw} to new datawatcher
+		set {_Serializer} to Registry.getBlockPositionSerializer(true) 
+		set {_DWO} to new WrappedDataWatcherObject(13 and {_Serializer})
+		{_dw}.setObject({_DWO} and {_OptionalBlockPos})		
+		set {_Serializer2} to Registry.get(EnumWrappers.getEntityPoseClass())
+		{_dw}.setObject(6, {_Serializer2}, EntityPose.STANDING.toNms())
+		set watchable collection field 0 of {_packet} to {_dw}
+		loop expressions-1:
+			set int pnum 0 of {_packet} to (loop-value).getEntityId()
+			send packet {_packet} to loop-value
+
+
+# Name: Reqn content from URL - Gets content from URL using reqn
+# Example: store content from URL "blob.com" to {_text}
+effect store content from URL %string% to %objects%:
+	trigger:
+		delay the effect
+		send a "get" request to "%expr-1%"
+		set {_resp} to the last http response
+		set {_body} to {_resp}'s body
+		set raw expr-2 to {_body}
+		continue
+
+
+# Name: Pickup item - Fake pickups item for certain players
+# Example: pickup item with id 100 by entity with id 101 for player
+effect pickup item with id %number% by entity with id %number% amount %number% for %players%:
+	trigger:
+		set {_packet} to new PacketPlayOutCollect(expr-1, expr-2, expr-3)
+		loop expressions-4:
+			loop-value.getHandle().playerConnection.sendPacket({_packet})
+
+
+# Name: Camera - Attaches player's camera to entity
+# Example: attach camera of player to entity with id 101
+effect attach camera of %players% to entity with id %number%:
+	trigger:
+		set {_packet} to new play_server_camera packet
+		set int field 0 of {_packet} to expr-2
+		send exprs-1 packet {_packet}
+
+
+# Name: Passengers - Sets clientside passengers of entity
+# Example: mount clientside entities with ids {_ids::*} count 2 to entity with id 101 for player
+effect mount clientside entities with ids %integers% count %number% to entity with id %number% for %players%:
+	trigger:
+		set {_packet} to new play_server_mount packet
+		set int field 0 of {_packet} to expr-3
+		set int field 1 of {_packet} to expr-2
+		set int array field 0 of {_packet} to exprs-1
+		send exprs-4 packet {_packet}
 
 
 #   ______________________________________________________________
@@ -1225,6 +1328,38 @@ packet event play_server_block_change:
 	set {_data::id} to "%{_id}%"
 	set {_data::location} to location field 0 of event-packet
 	call custom event "blockChange" with {_values::*} and data {_data::*}
+
+# Name: Steer vehicle - Called when player steers vehicle
+# Event values: player, sideways, foward, jump
+# Example: on clientside steer: send "%player% - %sideways% - %foward% - %jump%" to player
+event "clientsideSteer":
+	patterns: 
+		clientside steer
+	event-values: player
+expression sideways:
+	return type: number
+	usable in:
+		custom event "clientsideSteer"
+	get:
+		return event.getData("sideways")
+expression foward:
+	return type: number
+	usable in:
+		custom event "clientsideSteer"
+	get:
+		return event.getData("foward")
+expression jump:
+	return type: boolean
+	usable in:
+		custom event "clientsideSteer"
+	get:
+		return event.getData("flags")
+on packet event play_client_steer_vehicle:
+	set {_data::sideways} to (float field 0 of event-packet)
+	set {_data::foward} to (float field 1 of event-packet)
+	set {_data::flags} to "%(object field 2 of event-packet)%" parsed as boolean
+	set {_values::player} to player
+	call custom event "clientsideSteer" with {_values::*} and data {_data::*}
 
 
 #   ______________________________________________________________
