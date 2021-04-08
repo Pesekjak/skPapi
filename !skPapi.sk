@@ -34,7 +34,7 @@ options:
 #            ⚠ be able to help you with problems ⚠
 #   ______________________________________________________________
 
-	version: 1.0-BETA.5
+	version: 1.0-BETA.6
 
 import:
 	org.bukkit.Bukkit
