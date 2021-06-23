@@ -6,9 +6,9 @@ Changelog:
   - PacketListenerNMSK is now part of SkPapi because of some protocolLib glitches, thanks to TPGamesNL
   - Entity type ID now works a bit better, I still recommend checking IDs manually
   - Added expression for Biome IDs
-  - Added expression for jsonobject as readable text, useful for converting texts in packets
-  - Added expression for protocol version of player
-  - Added expressions for chunk by chunk coords and chunk coords from chunk
+  - Added expression for JSON object as readable text, useful for converting texts in packets
+  - Added expression for protocol version of the player
+  - Added expressions for chunk by chunk coordinations and chunk coordinations from a chunk
   - Added AND and OR operators as conditions
   - Fixed update team syntax
   - Added effect for changing server brand
@@ -21,16 +21,16 @@ Changelog:
   - Added full support for scoreboard objectives
   - Added effects for applying and removing potions client sided
   - Added effect for playing named sound effect
-  - Added effect for swaping hands of player client sided
+  - Added effect for swapping hands of player client sided
   - Added effect for changing type of player's debug screen
   - Added 5 effects for mob animations
   - Added 4 effects for particle animations
-  - Added support for client sided jukebox
-  - Added effect for client side difficulty
-  - Added effect for changing client side exp level
-  - Added effect for opening horse gui
+  - Added support for client-sided jukebox
+  - Added effect for client-side difficulty
+  - Added effect for changing client-side exp level
+  - Added effect for opening horse GUI
   - Added effect for changing entity's velocity client sided
-  - Added effect for changing main hand of player
+  - Added effect for changing the main hand of the player
   - Added effect for changing skin layers of player
   - Added 18 metadata effects for mobs
   - Added event for loading and unloading chunks
