@@ -1,10 +1,38 @@
 Changelog:
-  - Added effect for making player sleep
-  - Added effect for waking player up
-  - Added effect for reading content from the website using Reqn
-  - Added effect for picking up items client-sided
-  - Added effect for changing player's camera
-  - Added effect for setting passengers of entity client-sided
-  - Updating the client-side team didn't work
-  - All syntaxes now use numbers instead of integers because Skript handles them poorly
+  - Removed command
+  - Version check is now more optimized
+  - All syntaxes are now more optimized
+  - Variables now have "-" prefixes
+  - PacketListenerNMSK is now part of SkPapi because of some protocolLib glitches, thanks to TPGamesNL
+  - Entity type ID now works a bit better, I still recommend checking IDs manually
+  - Added expression for Biome IDs
+  - Added expression for jsonobject as readable text, useful for converting texts in packets
+  - Added expression for protocol version of player
+  - Added expressions for chunk by chunk coords and chunk coords from chunk
+  - Added AND and OR operators as conditions
+  - Fixed update team syntax
+  - Added effect for changing server brand
+  - Added effect for performing player respawn
+  - Added effect for updating entity if killed client sided
+  - Added effect for changing FOV
+  - Added effect for unloading chunks
+  - Added effect for showing end game credits
+  - Added effect for changing biomes client sided
+  - Added full support for scoreboard objectives
+  - Added effects for applying and removing potions client sided
+  - Added effect for playing named sound effect
+  - Added effect for swaping hands of player client sided
+  - Added effect for changing type of player's debug screen
+  - Added 5 effects for mob animations
+  - Added 4 effects for particle animations
+  - Added support for client sided jukebox
+  - Added effect for client side difficulty
+  - Added effect for changing client side exp level
+  - Added effect for opening horse gui
+  - Added effect for changing entity's velocity client sided
+  - Added effect for changing main hand of player
+  - Added effect for changing skin layers of player
+  - Added 18 metadata effects for mobs
+  - Added event for loading and unloading chunks
+  - Added event for updating settings
   - And some other small changes
