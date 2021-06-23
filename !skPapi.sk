@@ -24,6 +24,7 @@
 #
 #  Ｃｒｅｄｉｔｓ (っ◔◡◔)っ ♥
 #    Big thanks to Mr.Darth for helping me with packets and reflection (https://forums.skunity.com/members/mr-darth.11173/)
+#    TPGamesNL for allowing me to use part of his PacketListenerNMSK API (https://forums.skunity.com/resources/packetlistenernmsk.1147/)
 #    Govindas for helping me with some packets for NPCs (https://forums.skunity.com/members/govindas.643/)
 
 options:
@@ -34,39 +35,64 @@ options:
 #            ⚠ be able to help you with problems ⚠
 #   ______________________________________________________________
 
-	version: 1.0-BETA.6
+	version: 1.0-BETA.7
 
 import:
 	org.bukkit.Bukkit
 
 option nms:
-	get: 
-		set {_nms} to Bukkit.getServer().getClass().getPackage().getName().split("\.")[3]
-		return "net.minecraft.server.%{_nms}%"
+	get:
+		return Bukkit.getServer().getClass().getPackage().getName().split("\.")[3]
 
 import:
 	java.util.Optional
 	java.util.Arrays
-
-	{@nms}.IRegistry
-	{@nms}.MinecraftKey
-	{@nms}.BlockPosition
+	java.util.List
+	java.nio.charset.StandardCharsets
+	java.util.ArrayList
 	
-	{@nms}.PacketPlayOutGameStateChange
-	{@nms}.BossBattle$BarStyle as BarStyleNMS
-	{@nms}.PacketPlayOutBoss$Action as BarActionsNMS
-	{@nms}.PacketPlayOutCollect
+	io.netty.channel.ChannelInboundHandler
+	io.netty.channel.ChannelOutboundHandler
+	io.netty.buffer.ByteBuf
+	io.netty.buffer.Unpooled
+
+	net.minecraft.server.{@nms}.IRegistry
+	net.minecraft.server.{@nms}.MinecraftKey
+	net.minecraft.server.{@nms}.BlockPosition
+	net.minecraft.server.{@nms}.BiomeRegistry
+	net.minecraft.server.{@nms}.IScoreboardCriteria$EnumScoreboardHealthDisplay
+	net.minecraft.server.{@nms}.EnumMainHand
+	
+	net.minecraft.server.{@nms}.PacketPlayOutGameStateChange
+	net.minecraft.server.{@nms}.PacketPlayOutCollect
+	net.minecraft.server.{@nms}.PacketPlayOutMapChunk
+	net.minecraft.server.{@nms}.PacketPlayInClientCommand
+
+	net.minecraft.server.{@nms}.BossBattle$BarStyle as BarStyleNMS
+	net.minecraft.server.{@nms}.PacketPlayOutBoss$Action as BarActionsNMS
+	net.minecraft.server.{@nms}.PacketPlayInClientCommand$EnumClientCommand
+	net.minecraft.server.{@nms}.PacketPlayInUseEntity$EnumEntityUseAction
 
 	org.bukkit.ChatColor
+	org.bukkit.Material
 	org.bukkit.entity.EntityType
 	org.bukkit.boss.BarColor
 	org.bukkit.boss.BarStyle
 	
 	ch.njol.skript.Skript
+	ch.njol.skript.lang.Condition
+	ch.njol.skript.classes.Changer$ChangerUtils
+	ch.njol.skript.classes.Changer$ChangeMode
 
+	net.md_5.bungee.chat.ComponentSerializer
+
+	com.comphenix.protocol.PacketType
+	com.comphenix.protocol.PacketType$Play$Server as PacketTypePlayServer
+	com.comphenix.protocol.events.PacketContainer
 	com.comphenix.protocol.wrappers.WrappedDataWatcher$Registry
 	com.comphenix.protocol.wrappers.WrappedDataWatcher$WrappedDataWatcherObject
 	com.comphenix.protocol.wrappers.WrappedChatComponent
+	com.comphenix.protocol.wrappers.MinecraftKey as PMinecraftKey
 	com.comphenix.protocol.wrappers.Pair
 	com.comphenix.protocol.wrappers.Vector3F
 	com.comphenix.protocol.wrappers.BukkitConverters
@@ -75,21 +101,38 @@ import:
 	com.comphenix.protocol.wrappers.EnumWrappers$ItemSlot
 	com.comphenix.protocol.wrappers.EnumWrappers$EntityUseAction
 	com.comphenix.protocol.wrappers.EnumWrappers$WorldBorderAction
+	com.comphenix.protocol.wrappers.EnumWrappers$ScoreboardAction
+	com.comphenix.protocol.wrappers.EnumWrappers$Difficulty
 	com.comphenix.protocol.utility.MinecraftReflection
+	com.comphenix.protocol.injector.BukkitUnwrapper
+	com.comphenix.protocol.ProtocolLibrary
+	com.comphenix.protocol.reflect.IntEnum
 
 
 on load:
-	set {wccConverter} to BukkitConverters.getWrappedChatComponentConverter()
-	set {chatFormatEnum} to MinecraftReflection.getMinecraftClass("EnumChatFormat")
-	set {postypes::*} to ...EntityPose.values()
-	set {chatcolors::*} to ...ChatColor.values()
-	set {barcolors::*} to ...BarColor.values()
-	set {bartypes::*} to ...BarStyleNMS.values()
-	set {baractions::*} to ...BarActionsNMS.values()
+	set {-wccConverter} to BukkitConverters.getWrappedChatComponentConverter()
+	set {-ccserializer} to Registry.getChatComponentSerializer(true)
+	set {-epserializer} to Registry.get(EnumWrappers.getEntityPoseClass())
+	set {-v3fseriliazer} to Registry.get(Vector3F.getMinecraftClass())
+	set {-bpseriliazer} to Registry.getBlockPositionSerializer(true)
+	set {-chatFormatEnum} to MinecraftReflection.getMinecraftClass("EnumChatFormat")
+	set {-postypes::*} to ...EntityPose.values()
+	set {-chatcolors::*} to ...ChatColor.values()
+	set {-barcolors::*} to ...BarColor.values()
+	set {-bartypes::*} to ...BarStyleNMS.values()
+	set {-baractions::*} to ...BarActionsNMS.values()
+	set {-difficulties::*} to ...Difficulty.values()
+	set {-hands::*} to ...EnumMainHand.values()
+	loop ...BiomeRegistry.c.entrySet():
+		set {-biomes::%loop-value.getValue().a()%} to loop-value.getKey()
+	loop ...EntityType.values():
+		set {_id} to IRegistry.ENTITY_TYPE.a(IRegistry.ENTITY_TYPE.get(new MinecraftKey(lowercase "%loop-value%")))
+		set {_ent} to lowercase "%loop-value%".replace("_", " ")
+		set {-entitytypeids::%{_ent}%} to {_id} parsed as number
 
 
 on load:
-	set {_skript-reflect.ver} to "2.1.1"
+	set {_skript-reflect.ver} to "2.2.1"
 	set {_ThatPacketAddon.ver} to "1.0-BETA.3"
 	set {_Reqn.ver} to "1.2.1"
 	set {_SkriptJSON.ver} to "1.0.0"
@@ -102,22 +145,79 @@ on load:
 	if {@check-for-updates} is true:
 		send a "get" request to "https://raw.githubusercontent.com/Pesekjak/skPapi/main/version.txt"
 		set {_resp} to the last http response
-		set {_LastVer} to {_resp}'s body
-		set {_LastVerChars::*} to {_LastVer} split by ""
-		set {_LastVer} to ""
-		loop {_LastVerChars::*}:
-			if loop-value is "." or "1" or "2" or "3" or "4" or "5" or "6" or "7" or "8" or "9" or "0" or "-" or "B" or "E" or "T" or "A":
-				set {_LastVer} to "%{_LastVer}%%loop-value%"
-		send a "get" request to "https://raw.githubusercontent.com/Pesekjak/skPapi/main/changelog.txt"
-		set {_resp} to the last http response
-		set {_ChangeLog} to {_resp}'s body
-		if {_LastVer} is not "{@version}":
-			Skript.warning("&6&lSKPAPI: &6Detected version {@version}&6, the newest version is %{_LastVer}%")
-			loop all players where [input is op]:
-				send "&6&lSKPAPI: &6Detected version {@version}&6, the newest version is %{_LastVer}%" to loop-player
-				send "" to loop-player
-				send "&6%{_ChangeLog}%" to loop-player
-				send formatted "&6Gew the newest version here: &9&n<link:https://github.com/Pesekjak/skPapi>github.com/Pesekjak/skPapi<reset>" to loop-player
+		set {_lastVer::*} to {_resp}'s body split at nl
+		Skript.warning("&6&lSKPAPI: &6Detected version {@version}&6, the newest version is %{_lastVer::1}%") if {_lastVer::1} is not "{@version}"
+
+function injectPlayerConnection(p: player):
+	{_p} is online
+	create section with {_proxy}, {_ctx} stored in {_f::channelActive}:
+		{_ctx}.fireChannelActive()
+	create section with {_proxy}, {_ctx} stored in {_f::channelInactive}:
+		{_ctx}.fireChannelInactive()
+	create section with {_proxy}, {_ctx}, {_packet} stored in {_f::channelRead}:
+		set {_ev::player} to {_p}
+		set {_ev::string} to {_packet}.getClass().getSimpleName()
+		set {_data::packet} to {_packet}
+		set {_evt} to custom event "packet_evt" with {_ev::*} using data {_data::*}
+		call event {_evt}
+		if {_evt} is not cancelled:
+			{_ctx}.fireChannelRead({_packet})
+	create section with {_proxy}, {_ctx} stored in {_f::channelReadComplete}:
+		{_ctx}.fireChannelReadComplete()
+	create section with {_proxy}, {_ctx} stored in {_f::channelRegistered}:
+		{_ctx}.fireChannelRegistered()
+	create section with {_proxy}, {_ctx} stored in {_f::channelUnregistered}:
+		{_ctx}.fireChannelUnregistered()
+	create section with {_proxy}, {_ctx} stored in {_f::channelWritabilityChanged}:
+		{_ctx}.fireChannelWritabilityChanged()
+	create section with {_proxy}, {_ctx}, {_throwable} stored in {_f::exceptionCaught}:
+		{_ctx}.fireExceptionCaught({_throwable})
+	create section with {_proxy}, {_ctx}, {_evt} stored in {_f::userEventTriggered}:
+		{_ctx}.fireuserEventTriggered({_evt})
+	create section with {_proxy}, {_ctx}, {_localAddress}, {_channelPromise} stored in {_f::bind}:
+		{_ctx}.bind({_localAddress}, {_channelPromise})
+	create section with {_proxy}, {_ctx}, {_channelPromise} stored in {_f::close}:
+		{_ctx}.close({_channelPromise})
+	create section with {_proxy}, {_ctx}, {_remoteAddress}, {_localAddress}, {_channelPromise} stored in {_f::connect}:
+		{_ctx}.connect({_remoteAddress}, {_localAddress}, {_channelPromise})
+	create section with {_proxy}, {_ctx}, {_channelPromise} stored in {_f::deregister}:
+		{_ctx}.deregister({_channelPromise})
+	create section with {_proxy}, {_ctx}, {_channelPromise} stored in {_f::disconnect}:
+		{_ctx}.disconnect({_channelPromise})
+	create section with {_proxy}, {_ctx} stored in {_f::flush}:
+		{_ctx}.flush()
+	create section with {_proxy}, {_ctx} stored in {_f::read}:
+		{_ctx}.read()
+	create section with {_proxy}, {_ctx}, {_packet}, {_channelPromise} stored in {_f::write}:
+		set {_ev::player} to {_p}
+		set {_ev::string} to {_packet}.getClass().getSimpleName()
+		set {_data::packet} to {_packet}
+		set {_evt} to custom event "packet_evt" with {_ev::*} using data {_data::*}
+		call event {_evt}
+		if {_evt} is not cancelled:
+			{_ctx}.write({_packet}, {_channelPromise})
+	set {_handler} to new proxy instance of ChannelInboundHandler, ChannelOutboundHandler using {_f::*}
+	set {_channel} to {_p}.getHandle().playerConnection.networkManager.channel
+	{_channel}.pipeline().addBefore("packet_handler", "reflect_packets", {_handler})
+event "packet_evt":
+	pattern: nms packet <(.+)>
+	event-values: player, string
+	parse:
+		set {_packetType} to first element of regex-1
+		if class "net.minecraft.server.{@nms}.%{_packetType}%" is set:
+			continue
+		else:
+			Skript.error("That packet doesn't exist")
+	check:
+		if event-string is {_packetType}:
+			continue
+expression [event-]nmspacket:
+	usable in:
+		custom event "packet_evt"
+	get:
+		return event.getData("packet")
+on join:
+	injectPlayerConnection(player)
 
 
 #   ______________________________________________________________
@@ -144,7 +244,7 @@ expression new (1¦classic|2¦trimmed) uuid:
 		return {_uuid}
 
 
-# Name: JSON Object - Returns JSON object from text, useful for chat components
+# Name: JSON text object - Returns JSON object from text, useful for chat components
 # Example: jsonobject from text "&c[ADMIN]"
 expression jsonobject from text %string%:
 	return type: jsonobject
@@ -159,22 +259,99 @@ expression entity id of %entities%:
 	return type: integers
 	get:
 		loop exprs-1:
-			add (loop-expression.getEntityId()) to {_ids::*}
+			add 1 to {_i} 
+			set {_ids::%{_i}%} to loop-value.getEntityId()
 		return {_ids::*}
 
 
-# Name: Entity type ID - Returns entity type ID, useful for summoning client side entity
+# Name: Entity type ID - Returns entity type ID, useful for summoning client side entity (might not work every time)
 # Example: set {_id} to entity type id of player's target
 expression entity type id of %entities%:
 	return type: integers
 	get:
 		loop exprs-1:
-			set {_ent} to "%loop-expression%"
-			set {_id} to IRegistry.ENTITY_TYPE.a(IRegistry.ENTITY_TYPE.get(new MinecraftKey("%{_ent}%")))
-			set {_id} to {_id} parsed as integer
-			add {_id} to {_ids::*}
+			add 1 to {_i}
+			set {_} to "%loop-value%"
+			set {_ids::%{_i}%} to {-entitytypeids::%{_}%}
 		return {_ids::*}
-		
+
+
+# Name: Biome ID - Returns biome ID
+# Example: set {_id} to biome nms id of desert
+expression biome [nms] id of %biome%:
+	return type: number
+	get:
+		return {-biomes::%expr-1.getKey()%} 
+
+
+# Name: Chunk coord - Returns coord of chunk
+# Example: set {_x} to chunk coord x of chunk at player
+expression chunk coord (1¦x|2¦z) of %chunk%:
+	return type: number
+	get:
+		return (expr-1.getX() if parse mark is 1, else expr-1.getZ())
+
+
+# Name: Json as text - Returns json as readable text
+# Example: set {_text} to {_json} as readable text
+expression json %string% as readable text:
+	get:
+		send expr-1 to console
+		set {_m} to ComponentSerializer.parse(expr-1)
+		return "%{_m}%"
+
+
+# Name: Version - Gets a version of player (See https://wiki.vg/Protocol_version_numbers for more info)
+# Example: set {_ver} to protocol version of player
+expression protocol version of %player%:
+	return type: number
+	get:
+		return expr-1.getProtocolVersion()
+
+
+# Name: Chunk from coords - Returns chunk from chunk coords
+# Example: set {_x} to chunk at [x] %number% [and] [z] %number%
+expression chunk at [x] %number% [and] [z] %number% of world %world%:
+	return type: chunk
+	get:
+		set {_} to location(expr-1*16, 0, expr-2*16, expr-3)
+		return chunk of {_}
+
+
+#   ______________________________________________________________
+
+
+#                      _ _ _   _                 
+#                     | (_) | (_)                
+#   ___ ___  _ __   __| |_| |_ _  ___  _ __  ___ 
+#  / __/ _ \| '_ \ / _` | | __| |/ _ \| '_ \/ __|
+# | (_| (_) | | | | (_| | | |_| | (_) | | | \__ \
+#  \___\___/|_| |_|\__,_|_|\__|_|\___/|_| |_|___/
+
+
+# Name: Adds AND (&&) and OR (||) operators into Skript
+# Example: if 2 > 1 || 5 < 2:
+condition:
+	patterns:
+		<(.+)> && <(.+)>
+		<(.+)> \|\| <(.+)>
+	parse:
+		set {_condition1} to Condition.parse("%regex-1%", "Can't understand this condition: %regex-1%")
+		set {_condition2} to Condition.parse("%regex-2%", "Can't understand this condition: %regex-2%")
+		{_condition1} is set
+		{_condition2} is set
+		continue
+	check:
+		if (matched pattern is 1):
+			{_condition1}.check(event) is true
+			{_condition2}.check(event) is true
+			continue
+		else:
+			if ({_condition1}.check(event) is true):
+				continue
+			else if ({_condition2}.check(event) is true):
+				continue
+
 
 #   ______________________________________________________________
 
@@ -190,6 +367,9 @@ expression entity type id of %entities%:
 # Name: Store UUID - Stores uuid from player's nickname
 # Example: store uuid from nick "Notch" to {_uuid}
 effect store uuid from nick %string% to %~objects%:
+	parse:
+		continue if ChangerUtils.acceptsChange(expr-2, ChangeMode.SET and text) is true
+		Skript.error("'%expr-2%' can't be changed")
 	trigger:
 		delay the effect
 		send a "get" request to "https://api.mojang.com/users/profiles/minecraft/%expr-1%"
@@ -203,6 +383,9 @@ effect store uuid from nick %string% to %~objects%:
 # Name: Store skin - Stores skin from uuid
 # Example: store skin from uuid {_uuid} to {_skin}
 effect store skin from uuid %string% to %~objects%:
+	parse:
+		continue if ChangerUtils.acceptsChange(expr-2, ChangeMode.SET and text) is true
+		Skript.error("'%expr-2%' can't be changed")
 	trigger:
 		delay the effect
 		send a "get" request to "https://sessionserver.mojang.com/session/minecraft/profile/%expr-1%?unsigned=false"
@@ -216,8 +399,10 @@ effect store skin from uuid %string% to %~objects%:
 # Name: Destroy entity - Destroys entities from players.
 # Example: destroy player's target from player:
 effect destroy %entities% (from|for) %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_entity_destroy packet
+		continue
+	trigger:
 		loop exprs-1:
 			set {_count} to ({_count} ? 1) + 1
 			set {_id::%{_count}%} to loop-expression.getEntityId()
@@ -228,8 +413,10 @@ effect destroy %entities% (from|for) %players%:
 # Name: Destroy entity with id - Destroys entity with certain ID from players. (Use this for client side entities)
 # Example: destroy entity with id 101 from player:
 effect destroy entity with id %number% from %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_entity_destroy packet
+		continue
+	trigger:
 		set int array field of {_packet} to expr-1
 		send exprs-2 packet {_packet}
 
@@ -237,8 +424,10 @@ effect destroy entity with id %number% from %players%:
 # Name: Client side entity - Spawns client side entity for players.
 # Example: summon clientside entity 5 with id 101 with uuid (new classic uuid) at player's location for player
 effect summon clientside entity %number% with id %number% with uuid %string% at %location% for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_spawn_entity_living packet
+		continue
+	trigger:
 		set int field 1 of {_packet} to expr-1
 		set int field 0 of {_packet} to expr-2
 		set uuid field 0 of {_packet} to expr-3
@@ -251,8 +440,10 @@ effect summon clientside entity %number% with id %number% with uuid %string% at 
 # Name: Move client side entity - Moves with client side entity for players.
 # Example: move clientside entity with id 101 by 1600 0 1600 for player
 effect move clientside entity [with id] %number% by [x:] %number% [y:] %number% [z:] %number% for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_rel_entity_move packet
+		continue
+	trigger:
 		set int pnum 0 of {_packet} to expr-1
 		set short pnum 0 of {_packet} to expr-2
 		set short pnum 1 of {_packet} to expr-3
@@ -263,8 +454,10 @@ effect move clientside entity [with id] %number% by [x:] %number% [y:] %number% 
 # Name: Rotate client side entity - Rotates with client side entity for players.
 # Example: rotate clientside entity with id 101 by 16 0 for player
 effect rotate clientside entity [with id] %number% by [yaw:] %number% [pitch:] %number% for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_entity_look packet
+		continue
+	trigger:
 		set int pnum 0 of {_packet} to expr-1
 		set float field 0 of {_packet} to (expr-2*256/360)
 		set float field 1 of {_packet} to (expr-3*256/360)
@@ -272,10 +465,12 @@ effect rotate clientside entity [with id] %number% by [yaw:] %number% [pitch:] %
 
 
 # Name: Rotate head - Rotates head of entity with id for certain players.
-# Example: rotate clientside entity with id 101 by 90 for player:
+# Example: rotate clientside entity with id 101 by 90 for player
 effect rotate clientside entity with id %number% by %number% for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_entity_head_rotation packet
+		continue
+	trigger:
 		set int pnum 0 of {_packet} to expr-1
 		set byte field 0 of {_packet} to (expr-2*256/360)
 		send exprs-3 packet {_packet}
@@ -284,8 +479,10 @@ effect rotate clientside entity with id %number% by %number% for %players%:
 # Name: Teleport client side entity - Teleports client side entity for players.
 # Example: teleport clientside entity with id 101 to player's location for player
 effect teleport clientside entity [with id] %number% to %location% for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_entity_teleport packet
+		continue
+	trigger:
 		set int pnum 0 of {_packet} to expr-1
 		set double field 0 of {_packet} to (x-coord of expr-2)
 		set double field 1 of {_packet} to (y-coord of expr-2)
@@ -296,11 +493,13 @@ effect teleport clientside entity [with id] %number% to %location% for %players%
 
 
 # Name: Elytra animation - Applies elytra flying animation to client side entity for players.
-# Example: force clientside entity with id 101 to fly for player:
+# Example: force clientside entity with id 101 to fly for player
 effect force clientside entity [with id] %number% to (1¦fly|2¦stand) for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_entity_metadata packet
 		set {_dw} to new datawatcher
+		continue
+	trigger:
 		set watched byte 0 of {_dw} to (128.byteValue() if parse mark = 1, else 0.byteValue())
 		set watchable collection field 0 of {_packet} to {_dw}
 		set int field 0 of {_packet} to expr-1
@@ -308,11 +507,13 @@ effect force clientside entity [with id] %number% to (1¦fly|2¦stand) for %play
 
 
 # Name: Glow client side entity - Applies glow effect to client side entity for players.
-# Example: make clientside entity with id 101 glow for player:
+# Example: make clientside entity with id 101 glow for player
 effect make clientside entity [with id] %number% (1¦glow|2¦unglow) for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_entity_metadata packet
 		set {_dw} to new datawatcher
+		continue
+	trigger:
 		set watched byte 0 of {_dw} to (64.byteValue() if parse mark = 1, else 0.byteValue())
 		set watchable collection field 0 of {_packet} to {_dw}
 		set int field 0 of {_packet} to expr-1
@@ -320,11 +521,13 @@ effect make clientside entity [with id] %number% (1¦glow|2¦unglow) for %player
 
 
 # Name: Make client side entity invisible - Applies invisible effect to client side entity for players.
-# Example: make clientside entity with id 101 glow for player:
+# Example: make clientside entity with id 101 glow for player
 effect make clientside entity [with id] %number% (1¦invisible|2¦not invisible) for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_entity_metadata packet
 		set {_dw} to new datawatcher
+		continue
+	trigger:
 		set watched byte 0 of {_dw} to (32.byteValue() if parse mark = 1, else 0.byteValue())
 		set watchable collection field 0 of {_packet} to {_dw}
 		set int field 0 of {_packet} to expr-1
@@ -332,11 +535,13 @@ effect make clientside entity [with id] %number% (1¦invisible|2¦not invisible)
 
 
 # Name: Fire client side entity - Applies fire effect to client side entity for players.
-# Example: make clientside entity with id 101 burn for player:
+# Example: make clientside entity with id 101 burn for player
 effect make clientside entity [with id] %number% (1¦burn|2¦stop burn) for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_entity_metadata packet
 		set {_dw} to new datawatcher
+		continue
+	trigger:
 		set watched byte 0 of {_dw} to (1.byteValue() if parse mark = 1, else 0.byteValue())
 		set watchable collection field 0 of {_packet} to {_dw}
 		set int field 0 of {_packet} to expr-1
@@ -346,15 +551,16 @@ effect make clientside entity [with id] %number% (1¦burn|2¦stop burn) for %pla
 # Name: Change name of clientside entity - Changes name of client side entity
 # Example: change clientside entity with id 101 name to "My entity" for player
 effect change clientside entity with id %number% name to %string% for %players%:
-	trigger:
+	parse:
 		set {_metadata} to new play_server_entity_metadata packet
-		set {_wcc} to WrappedChatComponent.fromText("%expr-2%")
-		set {_nmsCC} to {wccConverter}.getGeneric({_wcc})
-		set {_name} to Optional.of({_nmsCC})
 		set {_dw} to new datawatcher
 		set watched boolean 3 of {_dw} to true
-		set {_serializer} to Registry.getChatComponentSerializer(true)
-		{_dw}.setObject(2, {_serializer}, {_name})
+		continue
+	trigger:
+		set {_wcc} to WrappedChatComponent.fromText("%expr-2%")
+		set {_nmsCC} to {-wccConverter}.getGeneric({_wcc})
+		set {_name} to Optional.of({_nmsCC})
+		{_dw}.setObject(2, {-ccserializer}, {_name})
 		set watchable collection field 0 of {_metadata} to {_dw}
 		set int field 0 of {_metadata} to expr-1
 		send exprs-3 packet {_metadata}
@@ -363,24 +569,25 @@ effect change clientside entity with id %number% name to %string% for %players%:
 # Name: Client side holo - Creates client side hologram, for removing use "Destroy entity with id" effect
 # Example: create clientside holo "My Hologram" with id 101 at player's location for player
 effect create clientside holo %string% with id %number% at %location% for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_spawn_entity_living packet
 		set int field 1 of {_packet} to 1
+		set {_metadata} to new play_server_entity_metadata packet
+		set {_dw} to new datawatcher
+		set watched byte 0 of {_dw} to 32.byteValue()
+		set watched byte 14 of {_dw} to 16.byteValue()
+		set watched boolean 3 of {_dw} to true
+		continue
+	trigger:
 		set int field 0 of {_packet} to expr-2
 		set double field 0 of {_packet} to x-pos of expr-3
 		set double field 1 of {_packet} to y-pos of expr-3
 		set double field 2 of {_packet} to z-pos of expr-3
 		send expr-4 packet {_packet}
-		set {_metadata} to new play_server_entity_metadata packet
 		set {_wcc} to WrappedChatComponent.fromText("%expr-1%")
-		set {_nmsCC} to {wccConverter}.getGeneric({_wcc})
+		set {_nmsCC} to {-wccConverter}.getGeneric({_wcc})
 		set {_name} to Optional.of({_nmsCC})
-		set {_dw} to new datawatcher
-		set watched byte 0 of {_dw} to 32.byteValue()
-		set watched byte 14 of {_dw} to 16.byteValue()
-		set watched boolean 3 of {_dw} to true
-		set {_serializer} to Registry.getChatComponentSerializer(true)
-		{_dw}.setObject(2, {_serializer}, {_name})
+		{_dw}.setObject(2, {-ccserializer}, {_name})
 		set watchable collection field 0 of {_metadata} to {_dw}
 		set int field 0 of {_metadata} to expr-2
 		send exprs-4 packet {_metadata}
@@ -389,16 +596,17 @@ effect create clientside holo %string% with id %number% at %location% for %playe
 # Name: Update side holo - Updates text of client side hologram
 # Example: update clientside holo with id 101 with text "Updated text" for player
 effect update clientside holo [with id] %number% with text %string% for %players%:
-	trigger:
+	parse:
 		set {_metadata} to new play_server_entity_metadata packet
-		set {_wcc} to WrappedChatComponent.fromText("%expr-2%")
-		set {_nmsCC} to {wccConverter}.getGeneric({_wcc})
-		set {_name} to Optional.of({_nmsCC})
 		set {_dw} to new datawatcher
 		set watched byte 0 of {_dw} to 32.byteValue()
 		set watched boolean 3 of {_dw} to true
-		set {_serializer} to Registry.getChatComponentSerializer(true)
-		{_dw}.setObject(2, {_serializer}, {_name})
+		continue
+	trigger:
+		set {_wcc} to WrappedChatComponent.fromText("%expr-2%")
+		set {_nmsCC} to {-wccConverter}.getGeneric({_wcc})
+		set {_name} to Optional.of({_nmsCC})
+		{_dw}.setObject(2, {-ccserializer}, {_name})
 		set watchable collection field 0 of {_metadata} to {_dw}
 		set int field 0 of {_metadata} to expr-1
 		send exprs-3 packet {_metadata}
@@ -407,13 +615,15 @@ effect update clientside holo [with id] %number% with text %string% for %players
 # Name: Change skin - Changes player's skin for certain players, for visibility call this effect after switching dimensions
 # Example: change skin of player to {_skin} for all players
 effect change skin of %player% to %skin% for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_player_info packet
 		set "PlayerInfoAction" penum 0 of {_packet} to "ADD_PLAYER"
 		set {_a::gamemode} to creative
+		set {_a::latency} to 0
+		continue
+	trigger:
 		set {_a::gameprofile::name} to expr-1's nickname
 		set {_a::gameprofile::skin} to expr-2
-		set {_a::latency} to 0
 		set {_a::gameprofile::uuid} to expr-1's uuid
 		set "PlayerInfoData" array pjson 0 of {_packet} to json of listvar {_a::*}
 		send exprs-3 packet {_packet}
@@ -422,13 +632,15 @@ effect change skin of %player% to %skin% for %players%:
 # Name: Change nick - Changes player's nick for certain players, for visibility call this effect after switching dimensions
 # Example: change nick of player to "deadmau5" with skin {_skin} for all players
 effect change nick of %player% to %string% with skin %skin% for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_player_info packet
 		set "PlayerInfoAction" penum 0 of {_packet} to "ADD_PLAYER"
 		set {_a::gamemode} to creative
+		set {_a::latency} to 0
+		continue
+	trigger:
 		set {_a::gameprofile::name} to expr-2
 		set {_a::gameprofile::skin} to expr-3
-		set {_a::latency} to 0
 		set {_a::gameprofile::uuid} to expr-1's uuid
 		set "PlayerInfoData" array pjson 0 of {_packet} to json of listvar {_a::*}
 		send exprs-4 packet {_packet}
@@ -437,15 +649,15 @@ effect change nick of %player% to %string% with skin %skin% for %players%:
 # Name: Remove player from tablist - Removes player from tablist of certain players
 # Example: remove player from tablist of all players
 effect remove %player% from tablist of %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_player_info packet
 		set "PlayerInfoAction" penum 0 of {_packet} to "REMOVE_PLAYER"
 		set {_a::gamemode} to creative
-		set {_a::gameprofile::name} to expr-1
-		store uuid from nick expr-1's nickname to {_uuid}
-		store skin from uuid {_uuid} to {_skin}
-		set {_a::gameprofile::skin} to {_skin}
+		set {_a::gameprofile::name} to "Steve"
+		set {_a::gameprofile::skin} to steve
 		set {_a::latency} to 0
+		continue
+	trigger:
 		set {_a::gameprofile::uuid} to expr-1's uuid
 		set "PlayerInfoData" array pjson 0 of {_packet} to json of listvar {_a::*}
 		send exprs-2 packet {_packet}
@@ -454,15 +666,17 @@ effect remove %player% from tablist of %players%:
 # Name: Add player to tablist - Adds player to tablist of certain players
 # Example: add player to tablist of all players
 effect add %player% to tablist of %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_player_info packet
 		set "PlayerInfoAction" penum 0 of {_packet} to "ADD_PLAYER"
 		set {_a::gamemode} to creative
-		set {_a::gameprofile::name} to expr-1
+		set {_a::latency} to 0
+		continue
+	trigger:
+		set {_a::gameprofile::name} to expr-1's nickname
 		store uuid from nick expr-1's nickname to {_uuid}
 		store skin from uuid {_uuid} to {_skin}
 		set {_a::gameprofile::skin} to {_skin}
-		set {_a::latency} to 0
 		set {_a::gameprofile::uuid} to expr-1's uuid
 		set "PlayerInfoData" array pjson 0 of {_packet} to json of listvar {_a::*}
 		send exprs-2 packet {_packet}
@@ -471,8 +685,10 @@ effect add %player% to tablist of %players%:
 # Name: Show demo screen - Shows demo screen to players
 # Example: show demoscreen to player
 effect show demo[ ]screen to %players%:
-	trigger:
+	parse:
 		set {_packet} to new PacketPlayOutGameStateChange(PacketPlayOutGameStateChange.f, 0)
+		continue
+	trigger:
 		loop exprs-1:
 			loop-value.getHandle().playerConnection.sendPacket({_packet})
 
@@ -491,7 +707,6 @@ effect force rain (1¦start|2¦stop) for %players%:
 effect change sky color to %number% for %players%:
 	trigger:
 		set {_packet} to new PacketPlayOutGameStateChange(PacketPlayOutGameStateChange.h, expr-1)
-		player.getHandle().playerConnection.sendPacket({_packet})
 		loop exprs-2:
 			loop-value.getHandle().playerConnection.sendPacket({_packet})
 
@@ -499,11 +714,13 @@ effect change sky color to %number% for %players%:
 # Name: Player tag visibility - Changes player's tag visibility to certain players
 # Example: set visibility to tag "Notch" to false with teamname "hiddentag_%player%" for %players%
 effect set visibility to tag %string% to (1¦true|2¦false) with teamname %string% for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_scoreboard_team packet
-		set byte field 0 of {_packet} to 0 
+		set byte field 0 of {_packet} to 0
+		{_packet}.getEnumModifier(ChatColor, {-chatFormatEnum}).write(0, ChatColor.WHITE)
+		continue
+	trigger:
 		set string field 0 of {_packet} to expr-2
-		{_packet}.getEnumModifier(ChatColor, {chatFormatEnum}).write(0, ChatColor.WHITE)
 		if parse mark is 1:
 			set string field 1 of {_packet} to "always" 
 		else:
@@ -515,16 +732,18 @@ effect set visibility to tag %string% to (1¦true|2¦false) with teamname %strin
 # Name: Player tags - Changes player's tags (prefix/suffix) to certain players (for entities use their UUIDs, for players use their nicknames)
 # Example: change player's nickname tags to "&c[ADMIN] " and " &6VIP" with color "&c" with teamname "1A" to all players
 effect change %string% tags to %string% and %string% with color %string% with teamname %string% to %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_scoreboard_team packet
 		set byte field 0 of {_packet} to 0 
-		set string field 0 of {_packet} to expr-5
 		set {_colorsymbols::*} to "&0", "&1", "&2", "&3", "&4", "&5", "&6", "&7", "&8", "&9", "&a", "&b", "&c", "&d", "&e", "&f", "&k", "&l", "&m", "&n", "&o", "&r"
+		continue
+	trigger:
+		set string field 0 of {_packet} to expr-5
 		loop {_colorsymbols::*}:
 			expr-4 = loop-value
 			set {_num} to loop-index
 			stop loop
-		{_packet}.getEnumModifier(ChatColor, {chatFormatEnum}).write(0, {chatcolors::%{_num}%})
+		{_packet}.getEnumModifier(ChatColor, {-chatFormatEnum}).write(0, {-chatcolors::%{_num}%})
 		set chat component field 1 of {_packet} to (jsonobject from text expr-2)
 		set chat component field 2 of {_packet} to (jsonobject from text expr-3)
 		set collection field 0 of {_packet} to expr-1
@@ -533,28 +752,33 @@ effect change %string% tags to %string% and %string% with color %string% with te
 
 # Name: Fake tablist player - Adds fake player to tablist of certain players, you can use tab in chat
 # Example: add fake tablist player "Notch" with skin {_skin} with uuid (new classic uuid) for all players
-effect add fake [tablist] player %string% [with] skin %skin% [with] uuid %string% for %players%:
-	trigger:
+effect add fake [tablist] player %string% [with] skin %skin% [with] uuid %string% ping %number% gamemode %gamemode% for %players%:
+	parse:
 		set {_packet} to new play_server_player_info packet
 		set "PlayerInfoAction" penum 0 of {_packet} to "ADD_PLAYER"
-		set {_a::gamemode} to creative
+		continue
+	trigger:
+		set {_a::gamemode} to expr-5
 		set {_a::gameprofile::name} to expr-1
 		set {_a::gameprofile::skin} to expr-2
-		set {_a::latency} to 0
+		set {_a::latency} to expr-4
 		set {_a::gameprofile::uuid} to expr-3
 		set "PlayerInfoData" array pjson 0 of {_packet} to json of listvar {_a::*}
-		send exprs-4 packet {_packet}
+		send exprs-6 packet {_packet}
+
 
 # Name: Remove fake tablist player - Removes fake player to tablist of certain players, you can use tab in chat
 # Example: remove fake tablist player with uuid (new classic uuid) for all players
 effect remove fake [tablist] player with uuid %string% for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_player_info packet
 		set "PlayerInfoAction" penum 0 of {_packet} to "REMOVE_PLAYER"
 		set {_a::gamemode} to creative
 		set {_a::gameprofile::name} to "Steve"
 		set {_a::gameprofile::skin} to steve
 		set {_a::latency} to 0
+		continue
+	trigger:
 		set {_a::gameprofile::uuid} to expr-1
 		set "PlayerInfoData" array pjson 0 of {_packet} to json of listvar {_a::*}
 		send exprs-2 packet {_packet}
@@ -568,7 +792,6 @@ effect play guardian effect (1¦with|2¦without) sounds for %players%:
 			set {_packet} to new PacketPlayOutGameStateChange(PacketPlayOutGameStateChange.k, 1)
 		else:
 			set {_packet} to new PacketPlayOutGameStateChange(PacketPlayOutGameStateChange.k, 0)
-		player.getHandle().playerConnection.sendPacket({_packet})
 		loop exprs-1:
 			loop-value.getHandle().playerConnection.sendPacket({_packet})
 
@@ -576,52 +799,57 @@ effect play guardian effect (1¦with|2¦without) sounds for %players%:
 # Name: Totem - Plays totem effect for certain players
 # Example: play totem effect for player
 effect play totem effect for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_entity_status packet
+		set byte field 0 of {_packet} to 35.byteValue()
+		continue
+	trigger:
 		loop exprs-1:
 			set int field 0 of {_packet} to loop-expression.getEntityId()
-			set byte field 0 of {_packet} to 35
 			send loop-expression packet {_packet}
 
 
 # Name: Finish action - Finishes action for player (client side)
 # Example: finish action for player
 effect finish action for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_entity_status packet
+		set byte field 0 of {_packet} to 9.byteValue()
+		continue
+	trigger:
 		loop exprs-1:
 			set int field 0 of {_packet} to loop-expression.getEntityId()
-			set byte field 0 of {_packet} to 9
 			send loop-expression packet {_packet}
 
 
 # Name: Position changer - Changes position of player, only other player's can see it
 # Example: set position of player to "STANDING" for all players
 effect set position of %player% to %string% for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_entity_metadata packet
-		set int field 0 of {_packet} to (entity id of expr-1)
 		set {_dw} to new datawatcher
-		set {_sz} to Registry.get(EnumWrappers.getEntityPoseClass())
 		set {_pos::*} to "STANDING", "FALL_FLYING", "SLEEPING", "SWIMMING", "SPIN_ATTACK", "CROUCHING", "DYING"
+		continue
+	trigger:
+		set int field 0 of {_packet} to (entity id of expr-1)
 		loop {_pos::*}:
 			expr-2 = loop-value
 			set {_num} to loop-index
 			stop loop
-		{_dw}.setObject(6, {_sz}, {postypes::%{_num}%}.toNms())
+		{_dw}.setObject(6, {-epserializer}, {-postypes::%{_num}%}.toNms())
 		set watchable collection field 0 of {_packet} to {_dw}
 		send exprs-3 packet {_packet}
 
 
 # Name: Client gamemode - Change gamemode client sided
-# Example: set clientgamemode of player to "survival"
-effect set clientgamemode of %players% to %string%:
+# Example: set clientgamemode of player to survival
+effect set clientgamemode of %players% to %gamemode%:
 	trigger:
-		if exprs-2 is "survival":
+		if exprs-2 is survival:
 			set {_packet} to new PacketPlayOutGameStateChange(PacketPlayOutGameStateChange.d, 0)
-		else if exprs-2 is "creative":
+		else if exprs-2 is creative:
 			set {_packet} to new PacketPlayOutGameStateChange(PacketPlayOutGameStateChange.d, 1)
-		else if exprs-2 is "adventure":
+		else if exprs-2 is adventure:
 			set {_packet} to new PacketPlayOutGameStateChange(PacketPlayOutGameStateChange.d, 2)
 		else:
 			set {_packet} to new PacketPlayOutGameStateChange(PacketPlayOutGameStateChange.d, 3)
@@ -632,11 +860,13 @@ effect set clientgamemode of %players% to %string%:
 # Name: Open chest - Opens/Closes chest for certain players
 # Example: force chest at location of event-block to open for player
 effect force chest at %location% to (1¦open|2¦close) for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_block_action packet
+		set int field 0 of {_packet} to 1
+		continue
+	trigger:
 		set location field of {_packet} to expr-1
 		set block field of {_packet} to block at expr-1
-		set int field 0 of {_packet} to 1
 		if parse mark is 1:
 			set int field 1 of {_packet} to 1
 		else:
@@ -647,25 +877,25 @@ effect force chest at %location% to (1¦open|2¦close) for %players%:
 # Name: Clientside NPC - Creates clientside npc
 # Example: create clientside npc with id 101 with name "NPC" with skin {_skin} with uuid (new classic uuid) with 2nd skin layer true at location player's location for player
 effect create clientside npc with id %number% with name %string% with skin %skin% with uuid %string% with 2nd skin layer %boolean% at location %location% for %players%:
-	trigger:
+	parse:
 		set {_npcspawn} to new play_server_named_entity_spawn packet
-		set int pnum 0 of {_npcspawn} to expr-1
-		
 		set {_packet} to new play_server_player_info packet
 		set "PlayerInfoAction" penum 0 of {_packet} to "ADD_PLAYER"
 		set {_a::gamemode} to creative
+		set {_a::latency} to 0
+		set short pnum 0 of {_npcspawn} to 1
+		continue
+	trigger:
+		set int pnum 0 of {_npcspawn} to expr-1
 		set {_a::gameprofile::name} to expr-2
 		set {_a::gameprofile::skin} to expr-3
-		set {_a::latency} to 0
-		set {_uuid} to expr-4
-		set {_a::gameprofile::uuid} to {_uuid}
+		set {_a::gameprofile::uuid} to expr-4
 		set "PlayerInfoData" array pjson 0 of {_packet} to json of listvar {_a::*}
 		send exprs-7 packet {_packet}
-		set "uuid" pinfo 0 of {_npcspawn} to {_uuid}
+		set "uuid" pinfo 0 of {_npcspawn} to expr-4
 		set double pnum 0 of {_npcspawn} to expr-6's x-loc
 		set double pnum 1 of {_npcspawn} to expr-6's y-loc
 		set double pnum 2 of {_npcspawn} to expr-6's z-loc
-		set short pnum 0 of {_npcspawn} to 1
 		set byte pnum 0 of {_npcspawn} to (expr-6's yaw)*256/360
 		set byte pnum 1 of {_npcspawn} to (expr-6's pitch)*256/360
 		send exprs-7 packet {_npcspawn}
@@ -681,17 +911,18 @@ effect create clientside npc with id %number% with name %string% with skin %skin
 # Name: Position changer from id - Changes position of entity with id for certain players
 # Example: set position of entity with id 101 to "STANDING" for all players
 effect set position of entity with id %number% to %string% for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_entity_metadata packet
-		set int field 0 of {_packet} to expr-1
 		set {_dw} to new datawatcher
-		set {_sz} to Registry.get(EnumWrappers.getEntityPoseClass())
 		set {_pos::*} to "STANDING", "FALL_FLYING", "SLEEPING", "SWIMMING", "SPIN_ATTACK", "CROUCHING", "DYING"
+		continue
+	trigger:
+		set int field 0 of {_packet} to expr-1
 		loop {_pos::*}:
 			expr-2 = loop-value
 			set {_num} to loop-index
 			stop loop
-		{_dw}.setObject(6, {_sz}, {postypes::%{_num}%}.toNms())
+		{_dw}.setObject(6, {-epserializer}, {-postypes::%{_num}%}.toNms())
 		set watchable collection field 0 of {_packet} to {_dw}
 		send exprs-3 packet {_packet}
 
@@ -699,8 +930,10 @@ effect set position of entity with id %number% to %string% for %players%:
 # Name: Play entity animation - Play animation of entity with id for certain players
 # Example: force entity with id 101 to make swing hand animation for player
 effect force entity with id %number% to make (1¦swing hand|2¦damage|3¦leave bed|4¦swing offhand|5¦critical|6¦magic) animation for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_animation packet
+		continue
+	trigger:
 		set int pnum 0 of {_packet} to expr-1
 		set {_num} to parse mark - 1
 		set object field 1 of {_packet} to {_num}.byteValue()
@@ -718,8 +951,10 @@ effect set cooldown for %players% of %itemtype% to %number% ticks:
 # Name: Equip clientside - Equips entity clientside for certain players
 # Example: eqiup clientside entity with id 101 with diamond sword air air air air air for player
 effect eqiup clientside entity with id %number% with [hand] %itemtype% [offhand] %itemtype% [helmet] %itemtype% [chestplate] %itemtype% [leggings] %itemtype% [boots] %itemtype% for %players%:
-	trigger:
-		set {_packet} to new play_server_entity_equipment packet		
+	parse:
+		set {_packet} to new play_server_entity_equipment packet
+		continue
+	trigger:		
 		set {_handslot} to new Pair(ItemSlot.MAINHAND, random item out of (expr-2))
 		set {_offhandslot} to new Pair(ItemSlot.OFFHAND, random item out of (expr-3))
 		set {_helmetslot} to new Pair(ItemSlot.HEAD, random item out of (expr-4))
@@ -735,12 +970,13 @@ effect eqiup clientside entity with id %number% with [hand] %itemtype% [offhand]
 # Name: Rotate AS client side  - Rotates client side armor stand for players.
 # Example: rotate part head of clientside armorstand with id 101 by 15 15 15 for player
 effect rotate part (1¦head|2¦body|3¦left arm|4¦right arm|5¦left leg|6¦right leg) of clientside armorstand with id %number% by %number% %number% %number% for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_entity_metadata packet
 		set {_dw} to new datawatcher
+		continue
+	trigger:
 		set {_num} to (parse mark + 14)
-		set {_Serializer} to Registry.get(Vector3F.getMinecraftClass())
-		set {_headRotation} to new WrappedDataWatcherObject({_num}, {_Serializer})
+		set {_headRotation} to new WrappedDataWatcherObject({_num}, {-v3fseriliazer})
 		set {_vecc} to new Vector3F(expr-2 and expr-3 and expr-4)
 		{_dw}.setObject({_headRotation}, {_vecc})
 		set watchable collection field 0 of {_packet} to {_dw}
@@ -751,9 +987,11 @@ effect rotate part (1¦head|2¦body|3¦left arm|4¦right arm|5¦left leg|6¦righ
 # Name: Armor stand types - Change types of armor stand for players. (1:Small, 4:Arms, 8:NoBase, 16:Marker - Count types together)
 # Example: change clientside armorstand with id 101 type to 5 for player:
 effect change clientside armorstand with id %number% type to %number% for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_entity_metadata packet
 		set {_dw} to new datawatcher
+		continue
+	trigger:
 		set watched byte 14 of {_dw} to expr-2.byteValue()
 		set watchable collection field 0 of {_packet} to {_dw}
 		set int field 0 of {_packet} to expr-1
@@ -763,19 +1001,21 @@ effect change clientside armorstand with id %number% type to %number% for %playe
 # Name: Create teams - Creates teams for certain players
 # Example: create clientside team with teamname "admins" with tags 0 with tag visibility "always" with collisions "never" with color "&c" with prefix "&c[&eADMIN&c] " with suffix "" for all players
 effect create clientside team with teamname %string% with tags %number% with tag visibility %string% with collisions %string% with color %string% with prefix %string% with suffix %string% for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_scoreboard_team packet
 		set int field 0 of {_packet} to 0
+		set {_colorsymbols::*} to "&0", "&1", "&2", "&3", "&4", "&5", "&6", "&7", "&8", "&9", "&a", "&b", "&c", "&d", "&e", "&f", "&k", "&l", "&m", "&n", "&o", "&r"
+		continue
+	trigger:
 		set string field 0 of {_packet} to expr-1
 		set byte field 1 of {_packet} to expr-2.byteValue()
 		set string field 1 of {_packet} to expr-3
 		set string field 2 of {_packet} to expr-4
-		set {_colorsymbols::*} to "&0", "&1", "&2", "&3", "&4", "&5", "&6", "&7", "&8", "&9", "&a", "&b", "&c", "&d", "&e", "&f", "&k", "&l", "&m", "&n", "&o", "&r"
 		loop {_colorsymbols::*}:
 			expr-5 = loop-value
 			set {_num} to loop-index
 			stop loop
-		{_packet}.getEnumModifier(ChatColor, {chatFormatEnum}).write(0, {chatcolors::%{_num}%})
+		{_packet}.getEnumModifier(ChatColor, {-chatFormatEnum}).write(0, {-chatcolors::%{_num}%})
 		set chat component field 1 of {_packet} to (jsonobject from text expr-6)
 		set chat component field 2 of {_packet} to (jsonobject from text expr-7)
 		send exprs-8 packet {_packet}
@@ -784,19 +1024,21 @@ effect create clientside team with teamname %string% with tags %number% with tag
 # Name: Update teams - Updates teams for certain players
 # Example: update clientside team with teamname "admins" with tags 0 with tag visibility "always" with collisions "never" with color "&c" with prefix "&c[&eADMIN&c] " with suffix "" for all players
 effect update clientside team with teamname %string% with tags %number% with tag visibility %string% with collisions %string% with color %string% with prefix %string% with suffix %string% for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_scoreboard_team packet
 		set int field 0 of {_packet} to 2
+		set {_colorsymbols::*} to "&0", "&1", "&2", "&3", "&4", "&5", "&6", "&7", "&8", "&9", "&a", "&b", "&c", "&d", "&e", "&f", "&k", "&l", "&m", "&n", "&o", "&r"
+		continue
+	trigger:
 		set string field 0 of {_packet} to expr-1
 		set byte field 1 of {_packet} to expr-2.byteValue()
 		set string field 1 of {_packet} to expr-3
 		set string field 2 of {_packet} to expr-4
-		set {_colorsymbols::*} to "&0", "&1", "&2", "&3", "&4", "&5", "&6", "&7", "&8", "&9", "&a", "&b", "&c", "&d", "&e", "&f", "&k", "&l", "&m", "&n", "&o", "&r"
 		loop {_colorsymbols::*}:
 			expr-5 = loop-value
 			set {_num} to loop-index
 			stop loop
-		{_packet}.getEnumModifier(ChatColor, {chatFormatEnum}).write(0, {chatcolors::%{_num}%})
+		{_packet}.getEnumModifier(ChatColor, {-chatFormatEnum}).write(0, {-chatcolors::%{_num}%})
 		set chat component field 1 of {_packet} to (jsonobject from text expr-6)
 		set chat component field 2 of {_packet} to (jsonobject from text expr-7)
 		send exprs-8 packet {_packet}
@@ -805,9 +1047,11 @@ effect update clientside team with teamname %string% with tags %number% with tag
 # Name: Add players to team - Adds players to team, for players use their nicknames, for entites use UUIDs
 # Example: add to clientside team with teamname "admins" entity player's nickname for all players
 effect add to clientside team with teamname %string% entity %strings% for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_scoreboard_team packet
 		set int field 0 of {_packet} to 3
+		continue
+	trigger:
 		set string field 0 of {_packet} to expr-1
 		set collection field 0 of {_packet} to exprs-2
 		send exprs-3 packet {_packet}
@@ -816,10 +1060,12 @@ effect add to clientside team with teamname %string% entity %strings% for %playe
 # Name: Remove players to team - Removes players from team, for players use their nicknames, for entites use UUIDs
 # Example: remove from clientside team with teamname "admins" entity player's nickname for all players
 effect remove from clientside team with teamname %string% entity %string% for %players%:
-	trigger:
-		set string field 0 of {_packet} to expr-1
+	parse:
 		set {_packet} to new play_server_scoreboard_team packet
 		set int field 0 of {_packet} to 4
+		continue
+	trigger:
+		set string field 0 of {_packet} to expr-1
 		set collection field 0 of {_packet} to expr-2
 		send exprs-3 packet {_packet}
 
@@ -827,9 +1073,11 @@ effect remove from clientside team with teamname %string% entity %string% for %p
 # Name: Remove team - Removes team with ID
 # Example: remove clientside team with teamname "admins" for all players
 effect remove clientside team with teamname %string% for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_scoreboard_team packet
 		set int field 0 of {_packet} to 1
+		continue
+	trigger:
 		set string field 0 of {_packet} to expr-1
 		send exprs-2 packet {_packet}
 
@@ -837,14 +1085,16 @@ effect remove clientside team with teamname %string% for %players%:
 # Name: Create boss bar - Creates boss bars for certain players
 # Example: create clientside bossbar with uuid {_uuid} title "&b&lCLIENT SIDE BOSSBAR" health 0.5 color RED division 4 darksky true music true fog true for player
 effect create clientside bossbar with uuid %string% title %string% health %number% color (1¦PINK|2¦BLUE|3¦RED|4¦GREEN|5¦YELLOW|6¦PURPLE|7¦WHITE) division %number% darksky %boolean% music %boolean% fog %boolean% for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_boss packet
-		set uuid field 0 of {_packet} to expr-1
 		set int field 0 of {_packet} to 0
+		continue
+	trigger:
+		set uuid field 0 of {_packet} to expr-1
 		set chat component field 0 of {_packet} to (jsonobject from text expr-2)
 		set float field 0 of {_packet} to expr-3
-		{_packet}.getEnumModifier(BarColor, 4).write(0, {barcolors::%parse mark%})
-		{_packet}.getEnumModifier(BarStyle, 5).write(0, {bartypes::%expr-4%})
+		{_packet}.getEnumModifier(BarColor, 4).write(0, {-barcolors::%parse mark%})
+		{_packet}.getEnumModifier(BarStyle, 5).write(0, {-bartypes::%expr-4%})
 		{_packet}.getBooleans().write(0, expr-5)
 		{_packet}.getBooleans().write(1, expr-6)
 		{_packet}.getBooleans().write(2, expr-7)
@@ -854,20 +1104,24 @@ effect create clientside bossbar with uuid %string% title %string% health %numbe
 # Name: Remove boss bar - Removes boss bars for certain players
 # Example: remove clientside bossbar with uuid {_uuid} for player
 effect remove clientside bossbar with uuid %string% for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_boss packet
+		set object field 1 of {_packet} to {-baractions::2}
+		continue
+	trigger:
 		set uuid field 0 of {_packet} to expr-1
-		set object field 1 of {_packet} to {baractions::2}
 		send exprs-2 packet {_packet}
 
 
 # Name: Update health of boss bar - Updates boss bar's health for certain players
 # Example: update health of clientside bossbar with uuid {_uuid} to 0 for player
 effect update health of clientside bossbar with uuid %string% to %number% for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_boss packet
+		set object field 1 of {_packet} to {-baractions::3}
+		continue
+	trigger:
 		set uuid field 0 of {_packet} to expr-1
-		set object field 1 of {_packet} to {baractions::3}
 		set float field 0 of {_packet} to expr-2
 		send exprs-3 packet {_packet}
 
@@ -875,10 +1129,12 @@ effect update health of clientside bossbar with uuid %string% to %number% for %p
 # Name: Update title of boss bar - Updates boss bar's title for certain players
 # Example: update title of clientside bossbar with uuid {_uuid} to "New title" for player
 effect update title of clientside bossbar with uuid %string% to %string% for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_boss packet
+		set object field 1 of {_packet} to {-baractions::4}
+		continue
+	trigger:
 		set uuid field 0 of {_packet} to expr-1
-		set object field 1 of {_packet} to {baractions::4}
 		set chat component field 0 of {_packet} to (jsonobject from text expr-2)
 		send exprs-3 packet {_packet}
 
@@ -886,22 +1142,26 @@ effect update title of clientside bossbar with uuid %string% to %string% for %pl
 # Name: Update style of boss bar - Updates boss bar's style for certain players
 # Example: update style of clientside bossbar with uuid {_uuid} to color GREEN division 1 for player
 effect update style of clientside bossbar with uuid %string% to color (1¦PINK|2¦BLUE|3¦RED|4¦GREEN|5¦YELLOW|6¦PURPLE|7¦WHITE) division %number% for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_boss packet
+		set object field 1 of {_packet} to {-baractions::5}
+		continue
+	trigger:
 		set uuid field 0 of {_packet} to expr-1
-		set object field 1 of {_packet} to {baractions::5}
-		{_packet}.getEnumModifier(BarColor, 4).write(0, {barcolors::%parse mark%})
-		{_packet}.getEnumModifier(BarStyle, 5).write(0, {bartypes::%expr-2%})
+		{_packet}.getEnumModifier(BarColor, 4).write(0, {-barcolors::%parse mark%})
+		{_packet}.getEnumModifier(BarStyle, 5).write(0, {-bartypes::%expr-2%})
 		send exprs-3 packet {_packet}
 
 
 # Name: Update flags of boss bar - Updates boss bar's flags for certain players
 # Example: update flags of clientside bossbar with uuid {_uuid} to darksky true music true fog false for %players%
 effect update flags of clientside bossbar with uuid %string% to darksky %boolean% music %boolean% fog %boolean% for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_boss packet
+		set object field 1 of {_packet} to {-baractions::6}
+		continue
+	trigger:
 		set uuid field 0 of {_packet} to expr-1
-		set object field 1 of {_packet} to {baractions::6}
 		{_packet}.getBooleans().write(0, expr-2)
 		{_packet}.getBooleans().write(1, expr-3)
 		{_packet}.getBooleans().write(2, expr-4)
@@ -911,20 +1171,24 @@ effect update flags of clientside bossbar with uuid %string% to darksky %boolean
 # Name: Crash game - Crashes game for certain players
 # Example: crash game for player
 effect crash game for %players%:
-	trigger:
+	parse:
 		set {_uuid} to (new classic uuid)
 		set {_packet} to new play_server_boss packet
 		set uuid field 0 of {_packet} to {_uuid}
 		set int field 0 of {_packet} to 2
 		set float field 0 of {_packet} to 1
+		continue
+	trigger:
 		send exprs-1 packet {_packet}
 
 
 # Name: Header and footer - Changes header and footer for certain players
 # Example: set header to "Test%nl%&6header" and footer to "&eI like SkPapi" for player
 effect set header to %string% and footer to %string% for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_player_list_header_footer packet
+		continue
+	trigger:
 		set chat component field 0 of {_packet} to (jsonobject from text expr-1)
 		set chat component field 1 of {_packet} to (jsonobject from text expr-2)
 		send exprs-3 packet {_packet}
@@ -933,8 +1197,10 @@ effect set header to %string% and footer to %string% for %players%:
 # Name: Block break animation - Set block break animations of blocks for certain players
 # Example: set block break of block at {_loc} to state 5 entity id (random integer between 0 and 9999) for player
 effect set block break of block at %location% to [state] %number% entity id %number% for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_block_break_animation packet
+		continue
+	trigger:
 		set location field 0 of {_packet} to expr-1
 		set int field 0 of {_packet} to expr-3
 		set int field 1 of {_packet} to expr-2
@@ -945,8 +1211,10 @@ effect set block break of block at %location% to [state] %number% entity id %num
 # Name: Send resource pack - Sends resource pack request. For hash use lowercase SHA-1 hashed URL of pack
 # Example: request pack from url "https://www.google.cz/" with hash "197cfd2e6827bee3c84bb2c7bcebbec2e7eaa0ea" for player
 effect request pack from url %string% with hash %string% for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_resource_pack_send packet
+		continue
+	trigger:
 		set string field 0 of {_packet} to expr-1
 		set string field 1 of {_packet} to expr-2
 		send exprs-3 packet {_packet}
@@ -955,11 +1223,13 @@ effect request pack from url %string% with hash %string% for %players%:
 # Name: Open sign gui - Opens client-side sign gui for player
 # Example: open new signgui with text "", "===============", "TYPE NEW NICKNAME", "===============" type birch sign to player
 effect open [new] sign[ ]gui with text %strings% type %itemtype% to %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_open_sign_editor packet
 		loop 4 times:
 			set {_line::%loop-number%} to ""
 		set {_count} to 1
+		continue
+	trigger:
 		loop exprs-1:
 			set {_line::%{_count}%} to loop-expression
 			add 1 to {_count}
@@ -979,72 +1249,84 @@ effect open [new] sign[ ]gui with text %strings% type %itemtype% to %players%:
 
 
 # Name: Set world border size - Sets size of world border
-# Example: set size of client side world border to 10 for player
-effect set size of client side world border to %number% for %players%:
-	trigger:
+# Example: set size of clientside world border to 10 for player
+effect set size of clientside world border to %number% for %players%:
+	parse:
 		set {_packet} to new play_server_world_border packet
 		{_packet}.getWorldBorderActions().write(0, WorldBorderAction.SET_SIZE)
-		{_packet}.getDoubles().write(2, expr-1)
-		{_packet}.getDoubles().write(3, expr-1)
+		continue
+	trigger:
+		set double field 2 of {_packet} to expr-1
+		set double field 3 of {_packet} to expr-1
 		send exprs-2 packet {_packet}
 
 
 # Name: Change world border center - Changes center of world border
-# Example: set center of client side world border to X 800 Z -900 for player
-effect set center of client side world border to X %number% Z %number% for %players%:
-	trigger:
+# Example: set center of clientside world border to X 800 Z -900 for player
+effect set center of clientside world border to X %number% Z %number% for %players%:
+	parse:
 		set {_packet} to new play_server_world_border packet
 		{_packet}.getWorldBorderActions().write(0, WorldBorderAction.SET_CENTER)
-		{_packet}.getDoubles().write(0, expr-1)
-		{_packet}.getDoubles().write(1, expr-2)
+		continue
+	trigger:
+		set double field 0 of {_packet} to expr-1
+		set double field 1 of {_packet} to expr-2
 		send exprs-3 packet {_packet}
 
 
 # Name: Warning size - Changes warning size of client-side world border (tints screen red)
-# Example: set size of client side world border to 50 for player
-effect set warning of client side world border to %number% for %players%:
-	trigger:
+# Example: set size of clientside world border to 50 for player
+effect set warning of clientside world border to %number% for %players%:
+	parse:
 		set {_packet} to new play_server_world_border packet
 		{_packet}.getWorldBorderActions().write(0, WorldBorderAction.SET_WARNING_BLOCKS)
+		continue
+	trigger:
 		set int field 2 of {_packet} to expr-1
 		send exprs-2 packet {_packet}
 
 
 # Name: Lerp size - Lerps size of world border (use milliseconds as speed)
-# Example: lerp size of client side world border from 20 to 50 with speed 1000 for player
-effect lerp size of client side world border from %number% to %number% with speed %number% for %players%:
-	trigger:
+# Example: lerp size of clientside world border from 20 to 50 with speed 1000 for player
+effect lerp size of clientside world border from %number% to %number% with speed %number% for %players%:
+	parse:
 		set {_packet} to new play_server_world_border packet
 		{_packet}.getWorldBorderActions().write(0, WorldBorderAction.LERP_SIZE)
-		set double field 3 of {_packet} to expr-1.doubleValue()
-		set double field 2 of {_packet} to expr-2.doubleValue()
-		set long field 0 of {_packet} to expr-3.longValue()
+		continue
+	trigger:
+		set double field 3 of {_packet} to expr-1
+		set double field 2 of {_packet} to expr-2
+		set long field 0 of {_packet} to expr-3
 		send exprs-4 packet {_packet}
 
 
 # Name: Initalize client-side world border - Initalizes client-side world border (use milliseconds as speed)
-# Example: initalize client side world border to X (x-coord of player's location) Z (z-coord of player's location) from 50 to 20 with speed 5000 warning time 10 warning blocks 5 for player
-effect initalize client side world border to X %number% Z %number% from %number% to %number% with speed %number% warning time %number% warning blocks %number% for %players%:
-	trigger:
+# Example: initalize clientside world border to X (x-coord of player's location) Z (z-coord of player's location) from 50 to 20 with speed 5000 warning time 10 warning blocks 5 for player
+effect initalize clientside world border to X %number% Z %number% from %number% to %number% with speed %number% warning time %number% warning blocks %number% for %players%:
+	parse:
 		set {_packet} to new play_server_world_border packet
 		{_packet}.getWorldBorderActions().write(0, WorldBorderAction.INITIALIZE)
-		set double field 0 of {_packet} to expr-1.doubleValue()
-		set double field 1 of {_packet} to expr-2.doubleValue()
-		set double field 3 of {_packet} to expr-3.doubleValue()
-		set double field 2 of {_packet} to expr-4.doubleValue()
-		set long field 0 of {_packet} to expr-5.longValue()
 		set int field 0 of {_packet} to 29900000
+		continue
+	trigger:
+		set double field 0 of {_packet} to expr-1
+		set double field 1 of {_packet} to expr-2
+		set double field 3 of {_packet} to expr-3
+		set double field 2 of {_packet} to expr-4
+		set long field 0 of {_packet} to expr-5.longValue()
 		set int field 1 of {_packet} to expr-6
 		set int field 2 of {_packet} to expr-7
 		send exprs-8 packet {_packet}
 
 
 # Name: Warning time - Changes warning time of client-side world border
-# Example: set warning time of client side world border to 50 for player
-effect set warning time of client side world border to %number% for %players%:
-	trigger:
+# Example: set warning time of clientside world border to 50 for player
+effect set warning time of clientside world border to %number% for %players%:
+	parse:
 		set {_packet} to new play_server_world_border packet
 		{_packet}.getWorldBorderActions().write(0, WorldBorderAction.SET_WARNING_TIME)
+		continue
+	trigger:
 		set int field 1 of {_packet} to expr-1
 		send exprs-2 packet {_packet}
 
@@ -1052,8 +1334,10 @@ effect set warning time of client side world border to %number% for %players%:
 # Name: Clientside time - Changes time for certain players
 # Example: set clientside time to world age 0 time 16000 for player
 effect set clientside time to world age %number% time %number% for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_update_time packet
+		continue
+	trigger:
 		set long field 0 of {_packet} to expr-1
 		set long field 1 of {_packet} to expr-2
 		send exprs-3 packet {_packet}
@@ -1062,15 +1346,15 @@ effect set clientside time to world age %number% time %number% for %players%:
 # Name: Sleep - Makes player sleep
 # Example: make player sleep at player's location for player
 effect make %players% sleep at %location% for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_entity_metadata packet
-		set {_OptionalBlockPos} to Optional.of(new BlockPosition(x location of expression-2, (y location of expression-2) - 0.5 and z location of expression-2))
 		set {_dw} to new datawatcher
-		set {_Serializer} to Registry.getBlockPositionSerializer(true)
-		set {_DWO} to new WrappedDataWatcherObject(13 and {_Serializer})
+		{_dw}.setObject(6, {-epserializer}, EntityPose.SLEEPING.toNms())
+		continue
+	trigger:
+		set {_OptionalBlockPos} to Optional.of(new BlockPosition(x location of expression-2, (y location of expression-2) - 0.5 and z location of expression-2))
+		set {_DWO} to new WrappedDataWatcherObject(13 and {-bpseriliazer})
 		{_dw}.setObject({_DWO} and {_OptionalBlockPos})
-		set {_Serializer2} to Registry.get(EnumWrappers.getEntityPoseClass())
-		{_dw}.setObject(6, {_Serializer2}, EntityPose.SLEEPING.toNms())
 		set watchable collection field 0 of {_packet} to {_dw}
 		loop expressions-1:
 			set int pnum 0 of {_packet} to (loop-value).getEntityId()
@@ -1080,15 +1364,15 @@ effect make %players% sleep at %location% for %players%:
 # Name: Wake up - Wakes up player
 # Example: wakeup player for player
 effect wakeup %players% for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_entity_metadata packet
-		set {_OptionalBlockPos} to Optional.empty()
 		set {_dw} to new datawatcher
-		set {_Serializer} to Registry.getBlockPositionSerializer(true) 
-		set {_DWO} to new WrappedDataWatcherObject(13 and {_Serializer})
+		{_dw}.setObject(6, {-epserializer}, EntityPose.STANDING.toNms())
+		continue
+	trigger:
+		set {_OptionalBlockPos} to Optional.empty()
+		set {_DWO} to new WrappedDataWatcherObject(13 and {-bpseriliazer})
 		{_dw}.setObject({_DWO} and {_OptionalBlockPos})		
-		set {_Serializer2} to Registry.get(EnumWrappers.getEntityPoseClass())
-		{_dw}.setObject(6, {_Serializer2}, EntityPose.STANDING.toNms())
 		set watchable collection field 0 of {_packet} to {_dw}
 		loop expressions-1:
 			set int pnum 0 of {_packet} to (loop-value).getEntityId()
@@ -1119,8 +1403,10 @@ effect pickup item with id %number% by entity with id %number% amount %number% f
 # Name: Camera - Attaches player's camera to entity
 # Example: attach camera of player to entity with id 101
 effect attach camera of %players% to entity with id %number%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_camera packet
+		continue
+	trigger:
 		set int field 0 of {_packet} to expr-2
 		send exprs-1 packet {_packet}
 
@@ -1128,12 +1414,751 @@ effect attach camera of %players% to entity with id %number%:
 # Name: Passengers - Sets clientside passengers of entity
 # Example: mount clientside entities with ids {_ids::*} count 2 to entity with id 101 for player
 effect mount clientside entities with ids %integers% count %number% to entity with id %number% for %players%:
-	trigger:
+	parse:
 		set {_packet} to new play_server_mount packet
+		continue
+	trigger:
 		set int field 0 of {_packet} to expr-3
 		set int field 1 of {_packet} to expr-2
 		set int array field 0 of {_packet} to exprs-1
 		send exprs-4 packet {_packet}
+
+
+# Name: Brand - Changes brand (custom server name in F3)
+# Example: send server brand "&d&lBlob &dSpigot&r" to player
+effect (send|show) [server] brand %string% (to|for) %players%:
+	parse:
+		set {_key} to new PMinecraftKey("brand")
+		set {_packet} to new play_server_custom_payload packet
+		set {_} to {_packet}.getMinecraftKeys().write(0, {_key})
+		loop 255 times:
+			set {_bytes::%loop-value%} to 0
+		continue
+	trigger:
+		set {_string::*} to ...expr-1.getBytes(StandardCharsets.UTF_8)
+		loop {_string::*}:
+			set {_bytes::%loop-index%} to loop-value
+		set {_bytes::0} to size of {_string::*}
+		set {_byteBuffer} to Unpooled.copiedBuffer([{_bytes::*}])
+		set {_serializer} to MinecraftReflection.getPacketDataSerializer({_byteBuffer})
+		{_packet}.getModifier().withType(ByteBuf).write(0, {_serializer})
+		send packet {_packet} to exprs-2
+
+
+# Name: Perform respawn - Performs respawn for player
+# Example: perform respawn for player
+effect perform respawn for %players%:
+	parse:
+		set {_packet} to new PacketPlayInClientCommand(EnumClientCommand.PERFORM_RESPAWN)
+		continue
+	trigger:
+		loop exprs-1:
+			loop-value.getHandle().playerConnection.a({_packet})
+
+
+# Name: Update entity - If entity is destroyed by packets, this effect can bring it back
+# Example: update entities %entities% for %players%
+effect update entities %entities% for %players%:
+	trigger:
+		set {_players} to Arrays.asList(expr-2)
+		loop exprs-1:
+			ProtocolLibrary.getProtocolManager().updateEntity(loop-value, {_players})
+
+
+# Name: Change FOV - Changes player's fov
+# Example: set fov of player to -0.1
+effect set fov of %players% to %number%:
+	parse:
+		set {_packet} to new play_server_abilities packet
+		continue
+	trigger:
+		set float field 1 of {_packet} to expr-2
+		loop exprs-1:
+			loop (integers between 0 and 3):
+				set boolean field loop-value-2 of {_packet} to (true if loop-value-1's gamemode is creative or spectator, else false)
+			set float field 0 of {_packet} to (loop-value's fly speed)/2
+			send loop-value packet {_packet}
+
+
+# Name: Unload chunk - Unloads chunk for player
+# Example: unload (chunk at player's location) for player
+effect unload %chunk% for %players%:
+	parse:
+		set {_packet} to new play_server_unload_chunk packet
+		continue
+	trigger:
+		set int field 0 of {_packet} to expr-1.getX()
+		set int field 1 of {_packet} to expr-1.getZ()
+		send exprs-2 packet {_packet}
+
+
+# Name: Show credits - Shows credit (endgame) screen to player
+# Example: show credit screen to player
+effect show credit[s][ ]screen to %players%:
+	parse:
+		set {_packet} to new PacketPlayOutGameStateChange(PacketPlayOutGameStateChange.e, 1)
+		continue
+	trigger:
+		loop exprs-1:
+			loop-value.getHandle().playerConnection.sendPacket({_packet})
+
+
+# Name: Biome of chunk - Changes biome of chunks for certain players
+# Example: change clientside biome of (chunk at player) to biome with id (biome nms id of desert) for player
+effect change clientside biome of [chunk] %chunk% to biome with id %number% for %players%:
+	parse:
+		set {_unwrapper} to new BukkitUnwrapper()
+		set {_packet} to new play_server_map_chunk packet
+		set object field 7 of {_packet} to true
+		set object field 8 of {_packet} to true
+		continue
+	trigger:
+		set {_chunk} to expression-1
+		set {_nmsChunk} to {_unwrapper}.unwrapItem({_chunk})
+		set {_MapChunk} to new PacketPlayOutMapChunk({_nmsChunk}, 65535)
+		set object field 0 of {_packet} to {_chunk}.getX()
+		set object field 1 of {_packet} to {_chunk}.getZ()
+		set object field 2 of {_packet} to {_MapChunk}.c
+		set {_id} to expr-2
+		if {-BiomeStorage::%{_id}%::1} is not set:
+			loop 1024 times:
+				set {-BiomeStorage::%{_id}%::%loop-value%} to {_id}.intValue()
+		set int array field 0 of {_packet} to {-BiomeStorage::%{_id}%::*}
+		set {_byte::*} to ...{_MapChunk}.f
+		loop {_byte::*}:
+			set {_byteArray::%loop-index%} to loop-value.byteValue()
+		set byte array field 0 of {_packet} to {_byteArray::*}
+		{_packet}.getListNbtModifier().write(0, {_MapChunk}.g)
+		send packet {_packet} to exprs-3
+
+
+# Name: Create objective - Creates new clientside scoreboard objective
+# Example: create new clientside scoreboard objective id "points" name "&ePlayer Points" mode "INTEGER" for player
+effect create new clientside scoreboard objective [with] id %string% [with] name %string% [with] mode %string% for %players%:
+	parse:
+		set {_packet} to new play_server_scoreboard_objective packet
+		set int field 0 of {_packet} to 0
+		continue
+	trigger:
+		set string field 0 of {_packet} to expr-1
+		set chat component field 0 of {_packet} to (jsonobject from text expr-2)
+		set {_packet}.getHandle().c to (EnumScoreboardHealthDisplay.HEARTS if expr-3 is "HEARTS", else EnumScoreboardHealthDisplay.INTEGER)
+		send packet {_packet} to exprs-4
+
+
+# Name: Update objective - Updates scoreboard objective
+# Example: update clientside scoreboard objective id "points" name "&6Player Points" mode "INTEGER" for player
+effect update clientside scoreboard objective [with] id %string% [with] name %string% [with] mode %string% for %players%:
+	parse:
+		set {_packet} to new play_server_scoreboard_objective packet
+		set int field 0 of {_packet} to 2
+		continue
+	trigger:
+		set string field 0 of {_packet} to expr-1
+		set chat component field 0 of {_packet} to (jsonobject from text expr-2)
+		set {_packet}.getHandle().c to (EnumScoreboardHealthDisplay.HEARTS if expr-3 is "HEARTS", else EnumScoreboardHealthDisplay.INTEGER)
+		send packet {_packet} to exprs-4
+
+
+# Name: Remove objective - Removes scoreboard objective
+# Example: remove clientside scoreboard objective id "points" for player
+effect remove clientside scoreboard objective [with] id %string% for %players%:
+	parse:
+		set {_packet} to new play_server_scoreboard_objective packet
+		set int field 0 of {_packet} to 1
+		continue
+	trigger:
+		set string field 0 of {_packet} to expr-1
+		send packet {_packet} to exprs-2
+
+
+# Name: Objective's display mode - Sets display mode of scoreboard objective
+# Example: set display of clientside scoreboard objective id "points" to below name for player
+effect set display of clientside scoreboard objective [with] id %string% to (0¦list|1¦sidebar|2¦below name|3¦to team with color index %-number%) for %players%:
+	parse:
+		set {_packet} to new play_server_scoreboard_display_objective packet
+		continue
+	trigger:
+		set int field 0 of {_packet} to (parse mark if parse mark < 3, else (parse mark + expr-2))
+		set string field 0 of {_packet} to expr-1
+		send packet {_packet} to exprs-3
+
+
+# Name: Update objective score - Updates entity's clientside objective score, use UUIDs for entities, nicknames for players
+# Example: update score of clientside scoreboard objective with id "points" of player's nickname to 5 for player
+effect update score of clientside scoreboard objective [with id] %string% of %string% to %number% for %players%:
+	parse:
+		set {_packet} to new play_server_scoreboard_score packet
+		{_packet}.getScoreboardActions().write(0, ScoreboardAction.CHANGE)
+		continue
+	trigger:
+		set int field 0 of {_packet} to expr-3
+		set string field 0 of {_packet} to expr-2
+		set string field 1 of {_packet} to expr-1
+		send packet {_packet} to exprs-4
+
+
+# Name: Remove objective score - Remove entity's clientside objective score, use UUIDs for entities, nicknames for players
+# Example: remove score of clientside scoreboard objective with id "points" of player's nickname for player
+effect remove score of clientside scoreboard objective [with id] %string% of %string% for %players%:
+	parse:
+		set {_packet} to new play_server_scoreboard_score packet
+		{_packet}.getScoreboardActions().write(0, ScoreboardAction.REMOVE)
+		continue
+	trigger:
+		set string field 0 of {_packet} to expr-2
+		set string field 1 of {_packet} to expr-1
+		send packet {_packet} to exprs-3
+
+
+# Name: Update health - Updates player's health and hunger
+# Example: set clientside health to 10 hunger 25 saturation to 1 for player
+effect set clientside health to %number% hunger %number% saturation to %number% for %players%:
+	parse:
+		set {_packet} to new play_server_update_health packet
+		continue
+	trigger:
+		set float field 0 of {_packet} to expr-1
+		set int field 0 of {_packet} to expr-2
+		set float field 1 of {_packet} to expr-3
+		send packet {_packet} to exprs-4
+
+
+# Name: Apply potion - Applies client side potion effect
+# Example: apply new clientside potion effect with id 30 for entity with id (entity id of player) amplifier 0 duration 2000 ambient true particles false icon true for player
+effect apply new clientside potion effect with id %number% for entity with id %number% (level|amplifier) %number% duration %number% ambient %boolean% particles %boolean% icon %boolean% for %players%:
+	parse:
+		set {_packet} to new play_server_entity_effect packet
+		set {_flags} to 0
+		continue
+	trigger:
+		set int field 0 of {_packet} to expr-2
+		set byte field 0 of {_packet} to expr-1.byteValue()
+		set byte field 1 of {_packet} to expr-3.byteValue()
+		set int field 1 of {_packet} to expr-4
+		add 1 to {_flags} if expr-5 is true
+		add 2 to {_flags} if expr-6 is true
+		add 4 to {_flags} if expr-7 is true
+		set byte field 2 of {_packet} to {_flags}.byteValue()
+		send packet {_packet} to exprs-8
+
+
+# Name: Remove potion - Removes client side potion effect
+# Example: remove clientside potion effect with id 30 for entity with id (entity id of player) for player
+effect remove clientside potion effect with id %number% for entity with id %number% for %players%:
+	parse:
+		set {_packet} to new play_server_remove_entity_effect packet
+		continue
+	trigger:
+		set byte field 0 of {_packet} to expr-1.byteValue()
+		set int field 0 of {_packet} to expr-2
+		send packet {_packet} to exprs-2
+
+
+# Name: Named sound - Plays named sounds, for example from resource packs
+# Example: play named sound effect "ambient.my.amazingsound" at player's location with volume 50 pitch 50 for player
+effect play named sound effect %string% at %location% with volume %number% pitch %number% for %players%:
+	trigger:
+		loop exprs-5:
+			loop-value.playSound(expr-2, expr-1, expr-3, expr-4)
+
+
+# Name: Swap hands - Swaps player's hands client sided
+# Example: swap hands clientside for player
+effect swap hands clientside for %players%:
+	parse:
+		set {_packet} to new play_server_entity_status packet
+		set byte field 0 of {_packet} to 55.byteValue()
+		continue
+	trigger:
+		loop exprs-1:
+			set int field 0 of {_packet} to loop-expression.getEntityId()
+			send loop-expression packet {_packet}
+
+
+# Name: Debug - Changes player's debug screen
+# Example: show reduced debug screen for player
+effect (1¦show|2¦hide) reduced debug screen for %players%:
+	parse:
+		set {_packet} to new play_server_entity_status packet
+		continue
+	trigger:
+		set byte field 0 of {_packet} to (22.byteValue() if parse mark is 1, else 23.byteValue())
+		loop exprs-1:
+			set int field 0 of {_packet} to loop-expression.getEntityId()
+			send loop-expression packet {_packet}
+
+
+# Name: Eat grass yum yum - Makes sheep eat grass :3
+# Example: make player's target eat grass for all players
+effect make %entities% eat grass for %players%:
+	parse:
+		set {_packet} to new play_server_entity_status packet
+		set byte field 0 of {_packet} to 10.byteValue()
+		continue
+	trigger:
+		loop exprs-1:
+			loop-value is a sheep
+			set int field 0 of {_packet} to loop-expression.getEntityId()
+			send exprs-2 packet {_packet}
+
+
+# Name: Iron golem animations - Makes iron golems do different things
+# Example: make player's target eat grass for all players
+effect make iron golem %entities% (1¦attack|2¦hold rose|3¦empty hands) for %players%:
+	parse:
+		set {_packet} to new play_server_entity_status packet
+		continue
+	trigger:
+		set byte field 0 of {_packet} to (4.byteValue() if parse mark is 1, else 11.byteValue())
+		set byte field 0 of {_packet} to 34.byteValue() if parse mark is 3
+		loop exprs-1:
+			loop-value is a iron golem
+			set int field 0 of {_packet} to loop-expression.getEntityId()
+			send exprs-2 packet {_packet}
+
+
+# Name: Evoker fangs - Plays evoker's fangs attack animation
+# Example: make evorker fangs attack player's target for all players
+effect make evoker fangs attack %entities% for %players%:
+	parse:
+		set {_packet} to new play_server_entity_status packet
+		set byte field 0 of {_packet} to 4.byteValue()
+		continue
+	trigger:
+		loop exprs-1:
+			loop-value is an evoker
+			set int field 0 of {_packet} to loop-expression.getEntityId()
+			send exprs-2 packet {_packet}
+
+
+# Name: Ravager actions - Plays ravager's animations
+# Example: make ravager player's target attack for player
+effect make ravager %entities% (1¦attack|2¦stunned) for %players%:
+	parse:
+		set {_packet} to new play_server_entity_status packet
+		continue
+	trigger:
+		loop exprs-1:
+			loop-value is a ravager
+			set byte field 0 of {_packet} to 4.byteValue() if parse mark is 1, else 39.byteValue()
+			set int field 0 of {_packet} to loop-expression.getEntityId()
+			send exprs-2 packet {_packet}
+
+
+# Name: Hoglin attack - Makes hoglin attack
+# Example: make hoglin player's target attack for player
+effect make (hoglin|zoglin) %entities% attack for %players%:
+	parse:
+		set {_packet} to new play_server_entity_status packet
+		set byte field 0 of {_packet} to 4.byteValue()
+		continue
+	trigger:
+		loop exprs-1:
+			loop-value is (a hoglin or a zoglin)
+			set int field 0 of {_packet} to loop-expression.getEntityId()
+			send exprs-2 packet {_packet}
+
+
+# Name: Potion - Plays splash potion effect
+# Example: splash potion clientsided with color 8364543 at player's location for all players
+effect splash (1¦potion|2¦instant) clientsided with color %number% at %location% for %players%:
+	parse:
+		set {_packet} to new play_server_world_event packet
+		continue
+	trigger:
+		set int field 0 of {_packet} to 2002 if parse mark is 1, else 2007
+		set location field 0 of {_packet} to expr-2
+		set int field 1 of {_packet} to expr-1
+		send exprs-3 packet {_packet}
+
+
+# Name: Ender eye - Breaks ender eye clientsided
+# Example: break ender eye at player's location for all players
+effect break ender eye at %location% for %players%:
+	parse:
+		set {_packet} to new play_server_world_event packet
+		set int field 0 of {_packet} to 2003
+		continue
+	trigger:
+		set location field 0 of {_packet} to expr-1
+		send exprs-2 packet {_packet}
+
+
+# Name: Dragon breath - Spawns dragon breath for player
+# Example: create dragon breath at player's location for all players
+effect create dragon breath at %location% for %players%:
+	parse:
+		set {_packet} to new play_server_world_event packet
+		set int field 0 of {_packet} to 2006
+		continue
+	trigger:
+		set location field 0 of {_packet} to expr-1
+		send exprs-2 packet {_packet}
+
+
+# Name: Explosion - Spawns explosion for player
+# Example: create clientside explosion at player's location for all players
+effect create clientside explosion at %location% for %players%:
+	parse:
+		set {_packet} to new play_server_world_event packet
+		set int field 0 of {_packet} to 3000
+		continue
+	trigger:
+		set location field 0 of {_packet} to expr-1
+		send exprs-2 packet {_packet}
+
+
+# Name: Disc - Plays music disc for player (909 - 921, other values stop the sound)
+# Example: play music disc 1 at player's location for all players
+effect play music disc %number% at %location% for %players%:
+	parse:
+		set {_packet} to new play_server_world_event packet
+		set int field 0 of {_packet} to 1010
+		continue
+	trigger:
+		set location field 0 of {_packet} to expr-2
+		set int field 1 of {_packet} to expr-1
+		send exprs-3 packet {_packet}
+
+
+# Name: Difficulty - Changes difficulty client sided
+# Example: change clientside difficulty for all players to normal
+effect change clientside difficulty for %players% to (1¦peaceful|2¦easy|3¦normal|4¦hard):
+	parse:
+		set {_packet} to new play_server_server_difficulty packet
+		continue
+	trigger:
+		{_packet}.getDifficulties().write(0, {-difficulties::%parse mark%})
+		send exprs-1 packet {_packet}
+
+
+# Name: Exp level - Changes player's experience level
+# Example: set clientside exp of player to level 5 bar 3
+effect set clientside exp of %players% to level %number% bar %number%:
+	parse:
+		set {_packet} to new play_server_experience packet
+		continue
+	trigger:
+		set float field 0 of {_packet} to expr-3
+		set int field 1 of {_packet} to expr-2
+		send exprs-1 packet {_packet}
+
+
+# Name: Horse gui - Open horse inventory for player
+# Example: open horse inventory with window id 1 slots 1 entity id (entity id of player's target) to player
+effect open horse inventory with window id %number% slots %number% entity id %number% to %players%:
+	parse:
+		set {_packet} to new PacketContainer(PacketTypePlayServer.OPEN_WINDOW_HORSE)
+		continue
+	trigger:
+		set int field 0 of {_packet} to expr-1
+		set int field 1 of {_packet} to expr-2
+		set int field 2 of {_packet} to expr-3
+		send exprs-4 packet {_packet}
+
+
+# Name: Entity velocity - Changes velocity of entity for player
+# Example: change clientside velocity of entity with id 111 to x 0 y 5 z 0 for player
+effect change clientside velocity of entity [with id] %number% to [x] %number% [y] %number% [z] %number% for %players%:
+	parse:
+		set {_packet} to new play_server_entity_velocity packet
+		continue
+	trigger:
+		set int field 0 of {_packet} to expr-1
+		set short field 0 of {_packet} to expr-2
+		set short field 1 of {_packet} to expr-3
+		set short field 2 of {_packet} to expr-4
+		send exprs-5 packet {_packet}
+
+
+# Name: Hand - Changes main hand of player
+# Example: change main hand of player to left
+effect change main hand of %players% to (1¦left|2¦right):
+	parse:
+		set {_packet} to new play_client_settings packet
+		set string field 0 of {_packet} to "en_us"
+		set int field 0 of {_packet} to 12
+		set chatvisibility field 0 of {_packet} to "FULL"
+		set boolean field 0 of {_packet} to true
+		set int field 1 of {_packet} to 127
+		continue
+	trigger:
+		set object field 5 of {_packet} to {-hands::%parse mark%}
+		loop exprs-1:
+			receive packet {_packet} from loop-value
+
+
+# Name: Skin - Changes skin layers of player
+# Example: change skin layers of player to cape off
+effect change skin layers of %players% to (1¦enabled|2¦disabled|3¦cape off):
+	parse:
+		set {_packet} to new play_client_settings packet
+		set string field 0 of {_packet} to "en_us"
+		set int field 0 of {_packet} to 12
+		set chatvisibility field 0 of {_packet} to "FULL"
+		set boolean field 0 of {_packet} to true
+		set object field 5 of {_packet} to {-hands::2}
+		continue
+	trigger:
+		if parse mark is 2:
+			set int field 1 of {_packet} to 0
+		else:
+			set int field 1 of {_packet} to (127 if parse mark is 1, else 126)
+		loop exprs-1:
+			receive packet {_packet} from loop-value
+
+
+# Name: Ender crystal beam - Changes targeted location of ender crystal
+# Example: target ender crystal with id 101 to player's location for player
+effect target ender crystal with id %number% to %location% for %players%:
+	parse:
+		set {_packet} to new play_server_entity_metadata packet
+		set {_dw} to new datawatcher
+		continue
+	trigger:
+		set watched location 7 of {_dw} to expr-2
+		set watchable collection field 0 of {_packet} to {_dw}
+		set int field 0 of {_packet} to expr-1
+		send exprs-3 packet {_packet}
+
+
+# Name: Ender crystal bedrock - Changes bedrock baseplate of ender crystal
+# Example: change baseplate of ender crystal with id 101 to true for player
+effect change baseplate of ender crystal with id %number% to %boolean% for %players%:
+	parse:
+		set {_packet} to new play_server_entity_metadata packet
+		set {_dw} to new datawatcher
+		continue
+	trigger:
+		set watched boolean 8 of {_dw} to expr-2
+		set watchable collection field 0 of {_packet} to {_dw}
+		set int field 0 of {_packet} to expr-1
+		send exprs-3 packet {_packet}
+
+
+# Name: Pufferfish state - Changes state of pufferfish
+# Example: change pufferfish state of pufferfish with id 101 to 2 for player
+effect change pufferfish state of pufferfish with id %number% to %number% for %players%:
+	parse:
+		set {_packet} to new play_server_entity_metadata packet
+		set {_dw} to new datawatcher
+		continue
+	trigger:
+		set watched int 16 of {_dw} to expr-2
+		set watchable collection field 0 of {_packet} to {_dw}
+		set int field 0 of {_packet} to expr-1
+		send exprs-3 packet {_packet}
+
+
+# Name: Fish variant - Changes variant of tropical fish
+# Example: change fish variant of tropical fish with id 101 to 1 for player
+effect change fish variant of [tropical] fish with id %number% to %number% for %players%:
+	parse:
+		set {_packet} to new play_server_entity_metadata packet
+		set {_dw} to new datawatcher
+		continue
+	trigger:
+		set watched int 16 of {_dw} to expr-2
+		set watchable collection field 0 of {_packet} to {_dw}
+		set int field 0 of {_packet} to expr-1
+		send exprs-3 packet {_packet}
+
+
+# Name: Baby - Changes mob to baby variant
+# Example: change age of entity with id 102 to baby for player
+effect change age of entity with id %number% to (1¦baby|2¦adult) for %players%:
+	parse:
+		set {_packet} to new play_server_entity_metadata packet
+		set {_dw} to new datawatcher
+		continue
+	trigger:
+		set watched boolean 15 of {_dw} to true if parse mark is 1, else false
+		set watchable collection field 0 of {_packet} to {_dw}
+		set int field 0 of {_packet} to expr-1
+		send exprs-2 packet {_packet}
+
+
+# Name: Saddle - Changes saddle of horse
+# Example: equip clientside horse with id 103 with saddle for player
+effect equip clientside horse with id %number% (1¦with|2¦without) saddle for %players%:
+	parse:
+		set {_packet} to new play_server_entity_metadata packet
+		set {_dw} to new datawatcher
+		continue
+	trigger:
+		set watched byte 16 of {_dw} to 4.byteValue() if parse mark is 1, else 0.byteValue()
+		set watchable collection field 0 of {_packet} to {_dw}
+		set int field 0 of {_packet} to expr-1
+		send exprs-2 packet {_packet}
+
+
+# Name: Donkey chest C: - Equips donkey with a chest
+# Example: equip clientside donkey with id 103 with chest for player
+effect equip clientside (1¦donkey|2¦llama) with id %number% (1¦with|2¦without) chest for %players%:
+	parse:
+		set {_packet} to new play_server_entity_metadata packet
+		set {_dw} to new datawatcher
+		continue
+	trigger:
+		set watched boolean 18 of {_dw} to true if parse mark is 1, else false
+		set watchable collection field 0 of {_packet} to {_dw}
+		set int field 0 of {_packet} to expr-1
+		send exprs-2 packet {_packet}
+
+
+# Name: Bee flags - Changes flags of bee
+# Example: change bee flags for bee with id 101 to 10 for player
+effect change bee flags for bee with id %number% to %number% for %players%:
+	parse:
+		set {_packet} to new play_server_entity_metadata packet
+		set {_dw} to new datawatcher
+		continue
+	trigger:
+		set watched byte 16 of {_dw} to (expr-2).byteValue()
+		set watchable collection field 0 of {_packet} to {_dw}
+		set int field 0 of {_packet} to expr-1
+		send exprs-2 packet {_packet}
+
+
+# Name: Animal sit - Changes sitting status of animal
+# Example: make animal with id 101 sit for player
+effect make animal with id %number% (1¦sit|2¦stand) for %players%:
+	parse:
+		set {_packet} to new play_server_entity_metadata packet
+		set {_dw} to new datawatcher
+		continue
+	trigger:
+		set watched byte 16 of {_dw} to 1.byteValue() if parse mark is 1, else 0.byteValue()
+		set watchable collection field 0 of {_packet} to {_dw}
+		set int field 0 of {_packet} to expr-1
+		send exprs-2 packet {_packet}
+
+
+# Name: Panda position :3 - Changes position of panda
+# Example: make panda with id 101 sneezing for player
+effect make panda with id %number% (0¦stand|2¦sneezing|4¦rolling|8¦sitting|16¦on back) for %players%:
+	parse:
+		set {_packet} to new play_server_entity_metadata packet
+		set {_dw} to new datawatcher
+		continue
+	trigger:
+		set watched byte 21 of {_dw} to (parse mark).byteValue()
+		set watchable collection field 0 of {_packet} to {_dw}
+		set int field 0 of {_packet} to expr-1
+		send exprs-2 packet {_packet}
+
+
+# Name: Polar bear position - Changes position of polar bear
+# Example: make polar bear with id 101 standing up for player
+effect make polar bear with id %number% (0¦stand|1¦standing up) for %players%:
+	parse:
+		set {_packet} to new play_server_entity_metadata packet
+		set {_dw} to new datawatcher
+		continue
+	trigger:
+		set watched boolean 16 of {_dw} to true if parse mark is 1, else false
+		set watchable collection field 0 of {_packet} to {_dw}
+		set int field 0 of {_packet} to expr-1
+		send exprs-2 packet {_packet}
+
+
+# Name: Sheep wool - Changes wool of sheep (0 - 15, 16 for sheared)
+# Example: set wool of sheep with id 105 to 4 for player
+effect set wool of sheep with id %number% to %number% for %players%:
+	parse:
+		set {_packet} to new play_server_entity_metadata packet
+		set {_dw} to new datawatcher
+		continue
+	trigger:
+		set watched byte 16 of {_dw} to expr-2.byteValue()
+		set watchable collection field 0 of {_packet} to {_dw}
+		set int field 0 of {_packet} to expr-1
+		send exprs-3 packet {_packet}
+
+
+# Name: Snowman pumpkin - Removes pumpkin from snowman
+# Example: change pumpkin of snowman with id 101 to true for player
+effect change pumpkin of snowman with id %number% to %boolean% for %players%:
+	parse:
+		set {_packet} to new play_server_entity_metadata packet
+		set {_dw} to new datawatcher
+		continue
+	trigger:
+		set watched byte 15 of {_dw} to 16.byteValue() if expr-2 is true, else 0.byteValue()
+		set watchable collection field 0 of {_packet} to {_dw}
+		set int field 0 of {_packet} to expr-1
+		send exprs-3 packet {_packet}
+
+
+# Name: Creeper charge - Makes creeper charged
+# Example: change charge status of creeper with id 201 to false for player
+effect change charge status of creeper with id %number% to %boolean% for %players%:
+	parse:
+		set {_packet} to new play_server_entity_metadata packet
+		set {_dw} to new datawatcher
+		continue
+	trigger:
+		set watched boolean 16 of {_dw} to expr-2
+		set watchable collection field 0 of {_packet} to {_dw}
+		set int field 0 of {_packet} to expr-1
+		send exprs-3 packet {_packet}
+
+
+# Name: Guardian beam - Changes target of guardian beam
+# Example: change target of beam of guardian with id 101 to entity with id 202 for player
+effect change target of beam of guardian with id %number% to entity with id %number% for %players%:
+	parse:
+		set {_packet} to new play_server_entity_metadata packet
+		set {_dw} to new datawatcher
+		continue
+	trigger:
+		set watched int 16 of {_dw} to expr-2
+		set watchable collection field 0 of {_packet} to {_dw}
+		set int field 0 of {_packet} to expr-1
+		send exprs-3 packet {_packet}
+
+
+# Name: Position of spell illager - Changes position of spell illager
+# Example: change position of spell illager with id 155 to summon for player
+effect change position of spell [casting] illager with id %number% to (0¦stand|1¦summon|2¦attack|3¦wololo|4¦disappear|5¦blindness) for %players%:
+	parse:
+		set {_packet} to new play_server_entity_metadata packet
+		set {_dw} to new datawatcher
+		continue
+	trigger:
+		set watched byte 16 of {_dw} to (parse mark).byteValue()
+		set watchable collection field 0 of {_packet} to {_dw}
+		set int field 0 of {_packet} to expr-1
+		send exprs-2 packet {_packet}
+
+
+# Name: Witch potion - Makes witch drink potion
+# Example: make witch with id 151 start drinking potion for player
+effect make witch with id %number% (0¦start|1¦stop) drinking potion for %players%:
+	parse:
+		set {_packet} to new play_server_entity_metadata packet
+		set {_dw} to new datawatcher
+		continue
+	trigger:
+		set watched boolean 16 of {_dw} to true if parse mark is 1, else false
+		set watchable collection field 0 of {_packet} to {_dw}
+		set int field 0 of {_packet} to expr-1
+		send exprs-2 packet {_packet}
+
+
+# Name: Ghast attack - Makes ghast attack
+# Example: make ghast with id 151 start attacking for player
+effect make ghast with id %number% (0¦start|1¦stop) attacking for %players%:
+	parse:
+		set {_packet} to new play_server_entity_metadata packet
+		set {_dw} to new datawatcher
+		continue
+	trigger:
+		set watched boolean 15 of {_dw} to true if parse mark is 1, else false
+		set watchable collection field 0 of {_packet} to {_dw}
+		set int field 0 of {_packet} to expr-1
+		send exprs-2 packet {_packet}
 
 
 #   ______________________________________________________________
@@ -1166,10 +2191,10 @@ expression interaction-type:
 		custom event "clientsideEntityInteract"
 	get:
 		return event.getData("type")
-on packet event play_client_use_entity:
+on nms packet PacketPlayInUseEntity:
 	set {_values::player} to player
-	set {_data::id} to (int field 0 of event-packet)
-	set {_data::type} to (object field 1 of event-packet)
+	set {_data::id} to "%nmspacket.a%" parsed as number
+	set {_data::type} to "%nmspacket.action%"
 	call custom event "clientsideEntityInteract" with {_values::*} and data {_data::*}
 
 
@@ -1198,11 +2223,11 @@ expression event-action-side:
 		custom event "clientsideDigging"
 	get:
 		return event.getData("side")
-on packet event play_client_block_dig:
+on nms packet PacketPlayInBlockDig:
 	set {_values::player} to player
-	set {_data::type} to (object field 2 of event-packet)
-	set {_data::location} to (location field 0 of event-packet)
-	set {_data::side} to (object field 1 of event-packet)
+	set {_data::type} to "%nmspacket.c%"
+	set {_data::location} to location of block at location((nmspacket.a).getX(), (nmspacket.a).getY(), (nmspacket.a).getZ(), world of player)
+	set {_data::side} to "%nmspacket.b%"
 	call custom event "clientsideDigging" with {_values::*} and data {_data::*}
 
 
@@ -1230,7 +2255,7 @@ on packet event play_server_chat:
 
 # Name: Advanced join - Called when player joins, can detect mods in client, version etc.
 # Event values: player, vanilla, payload
-# Example: on advanced join: broadcast "%player% - %vanilla% - %payload%"
+# Example: on advanced join: broadcast "%player% - %vanilla% - %payload% - %handshake%"
 event "advancedPayloadJoin":
 	patterns: 
 		advanced join
@@ -1247,13 +2272,19 @@ expression payload:
 		custom event "advancedPayloadJoin"
 	get:
 		return event.getData("payload")
+expression handshake:
+	return type: string
+	usable in:
+		custom event "advancedPayloadJoin"
+	get:
+		return event.getData("handshake")
 on packet event play_client_custom_payload:
 	set {_data::vanilla} to false
 	set {_channel::*} to object field 0 of event-packet
+	set {_data::handshake} to new String([byte buffer field of event-packet])
 	loop {_channel::*}:
 		if "%loop-value%" is "MC|Brand" or "minecraft:brand":
-			set {_message} to new String([byte buffer field of event-packet])
-			{_message} contains "vanilla"
+			{_data::handshake} contains "vanilla"
 			set {_data::vanilla} to true
 		set {_data::payload} to "%{_channel::*}%"
 	set {_values::player} to player
@@ -1283,9 +2314,9 @@ on packet event play_client_resource_pack_status:
 # Event values: player, line-%integer%
 # Example: on sign gui update: broadcast "%player% - %line-1%, %line-2%, %line-3%, %line-4%"
 event "signUpdate":
-    patterns: 
-        sign gui update
-    event-values: player
+	patterns: 
+		sign gui update
+	event-values: player
 expression line-%number%:
 	return type: string
 	usable in:
@@ -1307,9 +2338,9 @@ on packet event play_client_update_sign:
 # Event values: player, block-location, block-data
 # Example: on client-side block change: broadcast "%player% - %block-location% - %block-data%"
 event "blockChange":
-    patterns: 
-        client-side block change
-    event-values: player
+	patterns: 
+		client-side block change
+	event-values: player
 expression block-location:
 	return type: location
 	usable in:
@@ -1328,6 +2359,7 @@ packet event play_server_block_change:
 	set {_data::id} to "%{_id}%"
 	set {_data::location} to location field 0 of event-packet
 	call custom event "blockChange" with {_values::*} and data {_data::*}
+
 
 # Name: Steer vehicle - Called when player steers vehicle
 # Event values: player, sideways, foward, jump
@@ -1362,43 +2394,80 @@ on packet event play_client_steer_vehicle:
 	call custom event "clientsideSteer" with {_values::*} and data {_data::*}
 
 
-#   ______________________________________________________________
+# Name: Load chunk - Called when player loads a new chunk
+# Event values: player, chunk
+# Example: on clientside chunk load: broadcast "%player% - %event-chunk%"
+event "clientsideChunkLoad":
+	patterns: 
+		clientside chunk load
+	event-values: player, chunk
+on packet event play_server_map_chunk:
+	set {_values::player} to player
+	set {_values::chunk} to (chunk at (int field 0 of event-packet) (int field 1 of event-packet) of world (world of player's location))
+	call custom event "clientsideChunkLoad" with {_values::*}
 
-command /papi [<text>]:
-	aliases: /skpapi
-	trigger:
-		if player is not op:
-			send formatted "&6&lSKPAPI: &6Server is running &bSkPapi-{@version}&6, get your own here: <link:https://github.com/Pesekjak/skPapi>&9&ngithub.com/Pesekjak/skPapi<reset>" to player
-			stop trigger
-		if arg-1 is "update":
-			message "&6&lSKPAPI: &6Server is running &bSkPapi-{@version}&6..."
-			message "&6Checking version..."
-			send a "get" request to "https://raw.githubusercontent.com/Pesekjak/skPapi/main/version.txt"
-			set {_resp} to the last http response
-			set {_LastVer} to {_resp}'s body
-			set {_LastVerChars::*} to {_LastVer} split by ""
-			set {_LastVer} to ""
-			loop {_LastVerChars::*}:
-				if loop-value is "." or "1" or "2" or "3" or "4" or "5" or "6" or "7" or "8" or "9" or "0" or "-" or "B" or "E" or "T" or "A":
-					set {_LastVer} to "%{_LastVer}%%loop-value%"
-			if {_LastVer} is not "{@version}":
-				send "&6&lSKPAPI: &6Detected version {@version}&6, the newest version is %{_LastVer}%" to player
-				send formatted "&6Gew the newest version here: &9&n<link:https://github.com/Pesekjak/skPapi>github.com/Pesekjak/skPapi<reset>" to player
-			else:
-				message "&6&lSKPAPI: &6You running the latest version of SkPapi"
-		else if arg-1 is "changelog":
-			message "&6Checking changelog..."
-			send a "get" request to "https://raw.githubusercontent.com/Pesekjak/skPapi/main/changelog.txt"
-			set {_resp} to the last http response
-			set {_ChangeLog} to {_resp}'s body
-			send "" to player
-			send "&6%{_ChangeLog}%" to player
-		else if arg-1 is "about":
-			message "&6&lSKPAPI: &6Server is running &bSkPapi-{@version}&6. Thanks for downloading!"
-			message "&6Author: pesekjan"
-			message "&6Credits &c<3&6: Mr.Darth, Govindas"
-			send formatted "&6For better understanding syntaxes, check documentation here: <link:https://app.gitbook.com/@jakub-zahomolkou/s/skpapi/>&9&napp.gitbook.com/@jakub-zahomolkou/s/skpapi<reset>" to player
-		else:
-			message "&6&lSKPAPI: &6Server is running &bSkPapi-{@version}&6. Thanks for downloading!"
-			loop "update", "changelog" and "about":
-				message "&6- &7/papi %loop-value%"
+
+# Name: Unload chunk - Called when player unloads a new chunk
+# Event values: player, chunk
+# Example: on clientside chunk unload: broadcast "%player% - %event-chunk%"
+event "clientsideChunkUnload":
+	patterns: 
+		clientside chunk unload
+	event-values: player, chunk
+on packet event play_server_unload_chunk:
+	set {_values::player} to player
+	set {_values::chunk} to (chunk at (int field 0 of event-packet) (int field 1 of event-packet) of world (world of player's location))
+	call custom event "clientsideChunkUnload" with {_values::*}
+
+
+# Name: Player settings - Called when player updates settings
+# Event values: player, language, viewdistance, chat, chatcolors, skinlayers, hand
+# Example: on clientside settings: broadcast "%player% - %language% - %veiwdistance% - %chat% - %chatcolors% - %skinlayers% - %hand%"
+event "clientsideSettings":
+	patterns: 
+		clientside settings
+expression language:
+	return type: string
+	usable in:
+		custom event "clientsideSettings"
+	get:
+		return event.getData("language")
+expression veiwdistance:
+	return type: number
+	usable in:
+		custom event "clientsideSettings"
+	get:
+		return event.getData("veiwdistance")
+expression chat:
+	return type: string
+	usable in:
+		custom event "clientsideSettings"
+	get:
+		return event.getData("chat")
+expression chatcolors:
+	return type: boolean
+	usable in:
+		custom event "clientsideSettings"
+	get:
+		return event.getData("chatcolors")
+expression skinlayers:
+	return type: number
+	usable in:
+		custom event "clientsideSettings"
+	get:
+		return event.getData("skinlayers")
+expression hand:
+	return type: string
+	usable in:
+		custom event "clientsideSettings"
+	get:
+		return event.getData("hand")
+on packet event play_client_settings:
+	set {_values::player} to player
+	set {_data::language} to string field 0 of event-packet
+	set {_data::veiwdistance} to int field 0 of event-packet
+	set {_data::chat} to chatvisibility field 0 of event-packet
+	set {_data::chatcolors} to boolean field 0 of event-packet
+	set {_data::skinlayers} to int field 1 of event-packet
+	set {_data::hand} to "%object field 5 of event-packet%"
+	call custom event "clientsideSettings" with {_values::*} and data {_data::*}
